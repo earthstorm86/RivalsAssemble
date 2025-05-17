@@ -156,21 +156,50 @@ function toggleNameDropdown(inputElement, arrowButton) {
   const wrapper = inputElement.closest('.player-name-wrapper');
   const dropdownList = wrapper.querySelector('.player-name-dropdown-list');
   const isOpen = dropdownList.classList.toggle('open');
+  wrapper.classList.toggle('dropdown-active-wrapper', isOpen); // Add/remove class on wrapper
+
   if (isOpen) {
+    // Close other open dropdowns
+    document.querySelectorAll('.player-name-dropdown-list.open').forEach(otherDropdown => {
+      if (otherDropdown !== dropdownList) {
+        otherDropdown.classList.remove('open');
+        otherDropdown.closest('.player-name-wrapper').classList.remove('dropdown-active-wrapper');
+      }
+    });
     renderNameDropdownList(inputElement, dropdownList);
+  } else {
+    // Ensure the class is removed if closed by toggling itself
+    wrapper.classList.remove('dropdown-active-wrapper');
   }
 }
 
 function renderNameDropdownList(inputElement, dropdownListContainer) {
-  const currentInputValue = inputElement.value.trim();
-  const allNames = getQuickNames();
-  const namesToShow = allNames.filter(name => name.toLowerCase() !== currentInputValue.toLowerCase());
+  const currentInputValueForThisInput = inputElement.value.trim().toLowerCase();
+  const allSavedNames = getQuickNames();
+
+  // Get all names currently used in ANY player input field
+  const currentlyUsedNamesInPlayerList = [...list.children]
+    .map(li => {
+      const nameInput = li.querySelector('.player-name');
+      return nameInput ? nameInput.value.trim().toLowerCase() : '';
+    })
+    .filter(name => name !== '' && name !== currentInputValueForThisInput); // Exclude empty and the current field's own initial value
+
+  const namesToShow = allSavedNames.filter(savedName => {
+    const savedNameLower = savedName.toLowerCase();
+    // Show if: 
+    // 1. It's not the value currently in *this* input field 
+    //    (though this is mostly covered by the next check if the current input has a value)
+    // AND 2. It's not in the list of names used by *other* player inputs.
+    return savedNameLower !== currentInputValueForThisInput && 
+           !currentlyUsedNamesInPlayerList.includes(savedNameLower);
+  });
 
   dropdownListContainer.innerHTML = ''; // Clear previous items
 
   if (namesToShow.length === 0) {
     const noNamesItem = document.createElement('div');
-    noNamesItem.textContent = 'No other saved names';
+    noNamesItem.textContent = 'No other available names'; // Adjusted message
     noNamesItem.style.padding = '0.6rem 0.8rem';
     noNamesItem.style.color = '#888';
     dropdownListContainer.appendChild(noNamesItem);
@@ -184,9 +213,10 @@ function renderNameDropdownList(inputElement, dropdownListContainer) {
     item.addEventListener('click', () => {
       inputElement.value = name;
       dropdownListContainer.classList.remove('open');
+      dropdownListContainer.closest('.player-name-wrapper').classList.remove('dropdown-active-wrapper'); 
       inputElement.dispatchEvent(new Event('input', { bubbles: true })); 
-      const playerItemLi = inputElement.closest('.player-item'); // Get the li
-      if (playerItemLi && playerItemLi.dataset.active === 'true') singleRoll(playerItemLi); // Auto-roll if active
+      const playerItemLi = inputElement.closest('.player-item');
+      if (playerItemLi && playerItemLi.dataset.active === 'true') singleRoll(playerItemLi);
     });
     dropdownListContainer.appendChild(item);
   });
@@ -196,9 +226,11 @@ function renderNameDropdownList(inputElement, dropdownListContainer) {
 document.addEventListener('click', (event) => {
   const openDropdowns = document.querySelectorAll('.player-name-dropdown-list.open');
   openDropdowns.forEach(dropdown => {
+    const wrapper = dropdown.closest('.player-name-wrapper');
     // Check if the click was outside the dropdown and its associated input wrapper
-    if (!dropdown.closest('.player-name-wrapper').contains(event.target)) {
+    if (!wrapper.contains(event.target)) {
       dropdown.classList.remove('open');
+      wrapper.classList.remove('dropdown-active-wrapper'); // Remove wrapper class on outside click
     }
   });
 });
@@ -380,7 +412,7 @@ function weightedDifferentRole(li, counts, minimums) {
 
   return newRole || lastRole || allRolesWithMinimums[rng(0, allRolesWithMinimums.length - 1)]; // Final fallback
 }
-function applyRole(li,role){
+function applyRole(li, role, heroName) {
   const iconImg = li.querySelector('.role-icon');
   const roleSpan = li.querySelector('.role-name'); 
   const heroSpan = li.querySelector('.suggested-hero');
@@ -391,7 +423,7 @@ function applyRole(li,role){
   if (role) {
     iconImg.src = ICONS[role];
     iconImg.style.display = 'inline-block';
-    roleSpan.textContent=role.charAt(0).toUpperCase()+role.slice(1);
+    roleSpan.textContent = role.charAt(0).toUpperCase() + role.slice(1);
 
     // Add new overlay class
     if (role === 'strategist') li.classList.add('role-overlay-strategist');
@@ -399,16 +431,11 @@ function applyRole(li,role){
     else if (role === 'duellist') li.classList.add('role-overlay-duellist');
     else if (role === 'flex') li.classList.add('role-overlay-flex');
 
+    // Set hero span directly from the passed heroName
     if (BASE_ROLES.includes(role)) {
-      const heroList = HEROES_BY_ROLE[role.charAt(0).toUpperCase() + role.slice(1)];
-      if (heroList && heroList.length > 0) {
-        const randomHero = heroList[rng(0, heroList.length - 1)];
-        heroSpan.textContent = `${randomHero}`;
-      } else {
-        heroSpan.textContent = 'No heroes listed';
-      }
-    } else {
-      heroSpan.textContent = '';
+      heroSpan.textContent = heroName || ''; // Use provided heroName or empty if none
+    } else { // Flex role or other non-base roles
+      heroSpan.textContent = ''; // Flex usually doesn't have a specific hero suggestion from the list
     }
   } else { // No role or cleared role
     iconImg.src = '';
@@ -418,9 +445,29 @@ function applyRole(li,role){
     // Overlay classes already cleared
   }
 
-  const last=li.dataset.lastRole;
-  li.dataset.streak=(role===last?parseInt(li.dataset.streak||'0',10)+1:1);
-  li.dataset.lastRole=role;
+  const last = li.dataset.lastRole;
+  li.dataset.streak = (role === last ? parseInt(li.dataset.streak || '0', 10) + 1 : 1);
+  li.dataset.lastRole = role;
+}
+
+// New Helper Function to get a unique hero if possible
+function getUniqueHero(role, assignedHeroesForThisRoleContext, heroesData) {
+  const roleKey = role.charAt(0).toUpperCase() + role.slice(1);
+  const availableHeroes = heroesData[roleKey];
+
+  if (!availableHeroes || availableHeroes.length === 0) {
+    return 'No heroes listed'; // Or empty string: ''
+  }
+
+  // Find heroes not yet assigned in the current context (e.g., current rollAll session, or other players for singleRoll)
+  let unassignedHeroes = availableHeroes.filter(hero => !assignedHeroesForThisRoleContext.includes(hero));
+
+  if (unassignedHeroes.length > 0) {
+    return unassignedHeroes[rng(0, unassignedHeroes.length - 1)];
+  } else {
+    // All heroes for this role are already assigned in this context, so we have to pick a duplicate
+    return availableHeroes[rng(0, availableHeroes.length - 1)];
+  }
 }
 
 // New function to update dice dots based on player index
@@ -477,8 +524,11 @@ function updateDiceDots() {
 }
 
 function singleRoll(li){
-  const counts=currentCounts();
-  counts[li.dataset.lastRole]--;
+  const counts = currentCounts();
+  if (li.dataset.lastRole) { // Check if lastRole exists before decrementing
+    counts[li.dataset.lastRole]--;
+  }
+
   let newRole;
   let tries = 0;
   const minimums = { 
@@ -490,8 +540,18 @@ function singleRoll(li){
   do {
     newRole = weightedDifferentRole(li, counts, minimums);
     tries++;
-  } while (newRole === li.dataset.lastRole && tries < 40);
-  applyRole(li, newRole);
+  } while (newRole === li.dataset.lastRole && tries < 40 && BASE_ROLES.includes(newRole)); // Added BASE_ROLES check to ensure flex can repeat if needed
+
+  let chosenHeroName = '';
+  if (BASE_ROLES.includes(newRole)) {
+    const assignedHeroesForThisRole = [...list.children]
+      .filter(otherLi => otherLi !== li && otherLi.dataset.lastRole === newRole)
+      .map(otherLiWithSameRole => otherLiWithSameRole.querySelector('.suggested-hero').textContent)
+      .filter(Boolean); // Filter out empty strings
+    chosenHeroName = getUniqueHero(newRole, assignedHeroesForThisRole, HEROES_BY_ROLE);
+  }
+
+  applyRole(li, newRole, chosenHeroName);
   if (autoSortCB.checked) {
     sortPlayers(li, true); // Pass rolled LI and true to animate
   }
@@ -512,7 +572,7 @@ function rollAll(){
     localStorage.setItem(LAST_ROLL_ALL_TEAM_KEY, JSON.stringify(currentTeamNames));
   }
 
-  const counts={vanguard:0,duellist:0,strategist:0,flex:0};
+  const assignedCounts = {vanguard:0, duellist:0, strategist:0, flex:0};
   const minimums = { 
     vanguard: parseInt(vanguardMinInput.value) || 0, 
     duellist: parseInt(duellistMinInput.value) || 0, 
@@ -520,12 +580,24 @@ function rollAll(){
     flex: parseInt(flexMinInput.value) || 0
   };
 
+  // Keep track of heroes assigned in this "roll all" session for each role
+  const assignedHeroesByRoleThisSession = {vanguard: [], duellist: [], strategist: []}; // Flex heroes are not tracked for uniqueness this way
+
   let playersToAssign = [...activePlayers];
-  let assignedCounts = {vanguard:0,duellist:0,strategist:0,flex:0};
 
   playersToAssign.forEach(pLi => {
       const role = weightedDifferentRole(pLi, assignedCounts, minimums);
-      applyRole(pLi, role);
+      let chosenHeroName = '';
+      if (BASE_ROLES.includes(role)) {
+        chosenHeroName = getUniqueHero(role, assignedHeroesByRoleThisSession[role] || [], HEROES_BY_ROLE);
+        if (!assignedHeroesByRoleThisSession[role]) {
+          assignedHeroesByRoleThisSession[role] = [];
+        }
+        if (chosenHeroName && chosenHeroName !== 'No heroes listed') { // Only add if a valid hero was picked
+            assignedHeroesByRoleThisSession[role].push(chosenHeroName);
+        }
+      }
+      applyRole(pLi, role, chosenHeroName);
       assignedCounts[role]++;
       // Add player name to quick list if not empty
       const playerNameInput = pLi.querySelector('.player-name');
@@ -692,11 +764,12 @@ function sortPlayers(rolledLiElement = null, animateThisSort = true) {
     li.style.transform = 'translateY(0px) scale(1)';
 
     li.addEventListener('transitionend', function handler() {
-      li.style.transition = '';
+      li.style.transition = ''; // Clear specific transition property
       if (li === rolledLiElement && rolledCardMoved) { // Only reset zIndex if it was set
         li.style.zIndex = '';
       }
-      // Keep transform at scale(1) translateY(0) - it's the natural state now
+      // IMPORTANT: Remove the transform to prevent stacking context issues
+      li.style.transform = 'none'; 
       li.removeEventListener('transitionend', handler);
     }, { once: true });
   });

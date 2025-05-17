@@ -590,6 +590,11 @@ body.dark-mode .player-item .role-icon {
   display: flex; 
   width: 100%; 
 }
+
+.player-name-wrapper.dropdown-active-wrapper {
+  z-index: 50; /* Or any value that is higher than sibling .player-item elements but lower than the dropdown itself */
+}
+
 .player-name-dropdown-arrow {
   flex-shrink: 0;
   width: 30px;
@@ -620,7 +625,7 @@ body.dark-mode .player-item .role-icon {
   border: 1px solid var(--border-color); /* Ensure correct border color */
   border-top: none;
   border-radius: 0 0 4px 4px;
-  z-index: 2000;  /* Increased z-index substantially */
+  z-index: 2000;  /* This should be higher than .dropdown-active-wrapper's z-index */
   max-height: 150px; 
   overflow-y: auto;
   display: none; 
@@ -628,6 +633,7 @@ body.dark-mode .player-item .role-icon {
 }
 .player-name-dropdown-list.open {
   display: block;
+  /* z-index is already set on the base class, no need to repeat for .open unless overriding */
 }
 .player-name-dropdown-item {
   padding: 0.6rem 0.8rem;
