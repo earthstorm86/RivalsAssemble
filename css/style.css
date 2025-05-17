@@ -75,7 +75,7 @@ html {
 
 body {
   font-family: system-ui, sans-serif;
-  background: var(--palette-orange-secondary);
+  background: #1e1e1e;
   color: var(--text-main);
   min-height: 100vh;
   display: flex;
@@ -107,13 +107,13 @@ img {
   max-width: 1024px;
 }
 
-.panel {
+.player-panel {
   background: var(--card-bg);
   border: 1px solid var(--border-color); /* Updated border */
   border-radius: 8px;
   padding: clamp(0.8rem, 2vw, 1.2rem);
   box-shadow: 0 2px 6px rgba(0,0,0,0.05); /* Softer shadow */
-  flex: 1 1 min(100%, 360px);
+  flex: 1 1 min(100%, 600px);
   min-width: 0;
 }
 
@@ -129,7 +129,7 @@ img {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  position: relative;
+  position: relative; /* This creates a stacking context */
 }
 
 .player-item {
@@ -144,6 +144,7 @@ img {
   border-radius: .3rem;
   transition: transform 0.5s ease-in-out, box-shadow 0.3s ease-in-out;
   overflow: visible; /* Set to visible to prevent dropdown clipping */
+  position: relative; /* Ensure it forms a stacking context for z-indexed children if needed */
 }
 
 /* Role-specific overlays - updated to use new variables */
@@ -340,11 +341,12 @@ body.dark-mode .player-item .role-icon {
   margin: 0;
 }
 
-.options-panel {
-  flex: 0 1 260px;
+.right-column-container {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: clamp(0.8rem, 2vw, 1.2rem); /* Space between roll button and options panel */
+  flex: 1 1 min(100%, 300px); /* Example: Define how much space this column takes */
+  min-width: 0; /* Prevent overflow issues */
 }
 
 /* General button styling in options panel */
@@ -368,6 +370,11 @@ body.dark-mode .player-item .role-icon {
   margin-right: 0.5em; /* Space between icon and text */
 }
 
+#rollAllBtn{
+  width: 100%;
+  min-width: 100%;
+
+}
 /* Primary action buttons in options panel */
 #addBtn, #rollAllBtn, #copyPlainTextBtn {
   background: var(--btn-primary-bg);
@@ -613,7 +620,7 @@ body.dark-mode .player-item .role-icon {
   border: 1px solid var(--border-color); /* Ensure correct border color */
   border-top: none;
   border-radius: 0 0 4px 4px;
-  z-index: 1000; 
+  z-index: 2000;  /* Increased z-index substantially */
   max-height: 150px; 
   overflow-y: auto;
   display: none; 
@@ -845,7 +852,7 @@ body:not(.dark-mode) .player-name-dropdown-arrow {
   border: 1px solid var(--border-color); /* Ensure correct border */
   border-top: none;
   border-radius: 0 0 4px 4px;
-  z-index: 1000; 
+  z-index: 2000;  /* Increased z-index substantially */
   max-height: 150px; 
   overflow-y: auto;
   display: none; 
@@ -883,4 +890,63 @@ body:not(.dark-mode) .player-name-dropdown-item:hover {
 }
 .player-item.role-overlay-flex {
   box-shadow: inset 0 0 0 1000px rgba(60, 179, 113, 0.8);   /* Medium Sea Green */
+}
+
+.quick-populate-row .quick-pop-btn-container .remove-name-icon {
+  margin-left: 5px;
+  color: var(--text-color); /* Or a more prominent color like red */
+  cursor: pointer;
+  font-weight: bold;
+  padding: 2px 5px; /* Add some padding to make it easier to click */
+  border-radius: 3px;
+  line-height: 1; /* Ensure consistent vertical alignment */
+  font-size: 0.9em; /* Adjust size if needed */
+}
+
+.quick-populate-row .quick-pop-btn-container .remove-name-icon:hover {
+  color: var(--accent-color-error); /* Example: use a specific error/warning color on hover */
+  background-color: rgba(255, 0, 0, 0.1); /* Subtle background on hover */
+}
+
+/* Ensure the icon itself (if using Font Awesome) is styled if not inheriting properly */
+.quick-populate-row .quick-pop-btn-container .remove-name-icon i.fa-times,
+.quick-populate-row .quick-pop-btn-container .remove-name-icon i.fa-xmark {
+  /* Add any specific font awesome icon styling here if needed */
+  /* For example, ensuring its color is correctly inherited or set */
+  /* color: inherit; */ /* if the parent color is what you want */
+}
+
+/* Roll All Button Container */
+.roll-all-container {
+  display: flex;
+  justify-content: center;
+}
+
+/* Specific styles for the Roll All button to make it a primary CTA */
+#rollAllBtn {
+  padding: 0.8em 1.5em; /* Larger padding */
+  font-size: 1.2rem;   /* Larger font size */
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: color-mix(in srgb, var(--btn-primary-bg) 80%, black);
+  font-weight: bold; /* Make text bolder */
+  width: auto; /* Auto width based on content */
+  min-width: 100%;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15); /* Slightly more prominent shadow */
+  border-radius: 0.5rem;
+}
+
+#rollAllBtn:hover:not(.disabled) {
+  background: color-mix(in srgb, var(--btn-primary-bg) 85%, black);
+  transform: translateY(-2px); /* Slightly larger hover effect */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* Enhanced shadow on hover */
+}
+
+#rollAllBtn i.fas {
+  margin-right: 0.6em; /* Adjust icon spacing if needed */
+  font-size: 1.1em; /* Slightly larger icon relative to new font size */
+}
+
+.options-panel {
+  flex: 0 1 auto;
 } 

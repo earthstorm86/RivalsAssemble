@@ -5,48 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rivals Assemble</title>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="logo"><img src="images/logo-small.png" alt="Rivals Assemble  " width="237" height="177"></div>
   <div class="main">
     <section class="panel player-panel"><ul id="playerList" class="player-list"></ul></section>
-    <section class="panel options-panel">
-      <button id="rollAllBtn"><i class="fas fa-dice"></i> Roll All</button>
-      <button id="copyPlainTextBtn"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
-      <button id="darkBtn">Dark Mode</button>
-      <div class="role-options-section">
-        <h3>Minimums</h3>
-        <div class="min-inputs-grid">
-          <div class="option-group">
-            <label for="vanguardMin">Vanguard</label>
-            <button class="min-adjust-btn" data-direction="decrement">-</button>
-            <input type="number" id="vanguardMin" value="1" min="0" max="6">
-            <button class="min-adjust-btn" data-direction="increment">+</button>
+    <div class="right-column-container">
+      <div class="roll-all-container">
+        <button id="rollAllBtn"><i class="fas fa-dice"></i> Roll All</button>
+      </div>
+      <section class="panel options-panel">
+        <button id="copyPlainTextBtn"><i class="fas fa-copy"></i> Copy Team</button>
+        <button id="darkBtn"><i class="fas fa-moon"></i> Dark Mode</button>
+        <div class="role-options-section">
+          <h3>Minimums</h3>
+          <div class="min-inputs-grid">
+            <div class="option-group">
+              <label for="vanguardMin">Vanguard</label>
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="vanguardMin" value="1" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+            <div class="option-group">
+              <label for="duellistMin">Duellist</label>
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="duellistMin" value="2" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+            <div class="option-group">
+              <label for="strategistMin">Strategist</label>
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="strategistMin" value="2" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+            <div class="option-group">
+              <label for="flexMin">Flex</label>
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="flexMin" value="0" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+            <div id="minimumsWarning" class="warning-message"></div>
           </div>
-          <div class="option-group">
-            <label for="duellistMin">Duellist</label>
-            <button class="min-adjust-btn" data-direction="decrement">-</button>
-            <input type="number" id="duellistMin" value="2" min="0" max="6">
-            <button class="min-adjust-btn" data-direction="increment">+</button>
-          </div>
-          <div class="option-group">
-            <label for="strategistMin">Strategist</label>
-            <button class="min-adjust-btn" data-direction="decrement">-</button>
-            <input type="number" id="strategistMin" value="2" min="0" max="6">
-            <button class="min-adjust-btn" data-direction="increment">+</button>
-          </div>
-          <div class="option-group">
-            <label for="flexMin">Flex</label>
-            <button class="min-adjust-btn" data-direction="decrement">-</button>
-            <input type="number" id="flexMin" value="0" min="0" max="6">
-            <button class="min-adjust-btn" data-direction="increment">+</button>
-          </div>
-          <div id="minimumsWarning" class="warning-message"></div>
+          <label id="lblAutoSort"><input type="checkbox" id="autoSortCB" checked>Auto Sort Roles</label>
+          <label id="lblRotateRoles"><input type="checkbox" id="rotateRolesCB" checked>Rotate Roles on Reroll</label>
         </div>
-        <label id="lblAutoSort"><input type="checkbox" id="autoSortCB" checked>Auto Sort Roles</label>
-        <label id="lblRotateRoles"><input type="checkbox" id="rotateRolesCB" checked>Rotate Roles on Reroll</label>      </div>
-    </section>
+      </section>
+    </div>
   </div>
 <script>
 const ANIMATE_ROLL_ALL_SORT = true; // Config option for animating sort on Roll All
@@ -698,12 +704,12 @@ function sortPlayers(rolledLiElement = null, animateThisSort = true) {
 
 // Function to update the text of the dark mode button
 function updateDarkModeButtonText() {
-    const darkBtn = document.getElementById('darkBtn');
-    if (document.body.classList.contains('dark-mode')) {
-        darkBtn.textContent = 'Switch to Light Mode';
-    } else {
-        darkBtn.textContent = 'Switch to Dark Mode';
-    }
+  const isDarkMode = document.body.classList.contains('dark-mode');
+  if (isDarkMode) {
+    darkBtn.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+  } else {
+    darkBtn.innerHTML = '<i class="fas fa-moon"></i> Dark Mode';
+  }
 }
 
 // Initialize the application after DOM is loaded and heroes are fetched
@@ -713,18 +719,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateDarkModeButtonText(); 
 
   const playerPanel = document.querySelector('.player-panel'); 
-  const quickRow = document.querySelector('.quick-populate-row'); 
-  if (playerPanel && quickRow) {
-    playerPanel.appendChild(quickRow);
-    const editNamesBtn = document.createElement('button');
-    editNamesBtn.textContent = 'Edit Names';
-    editNamesBtn.className = 'edit-names-btn';
-    playerPanel.appendChild(editNamesBtn); 
+  const quickPopRow = document.querySelector('.quick-populate-row'); 
+  if (playerPanel && quickPopRow) {
+    playerPanel.appendChild(quickPopRow);
+    const editNamesButton = document.createElement('button');
+    editNamesButton.textContent = 'Edit Names';
+    editNamesButton.className = 'edit-names-btn';
+    playerPanel.appendChild(editNamesButton); 
     let isEditMode = false;
-    editNamesBtn.addEventListener('click', () => {
+    editNamesButton.addEventListener('click', () => {
       isEditMode = !isEditMode;
       renderQuickPopulateButtons(isEditMode);
-      editNamesBtn.textContent = isEditMode ? 'Done Editing' : 'Edit Names';
+      editNamesButton.textContent = isEditMode ? 'Done Editing' : 'Edit Names';
     });
   }
 
@@ -765,49 +771,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Restore Pre-populate players from LAST_ROLL_ALL_TEAM_KEY
-  const lastTeamJSON = localStorage.getItem(LAST_ROLL_ALL_TEAM_KEY);
-  let teamNamesToLoad = [];
-  if (lastTeamJSON) {
-    try {
-      const parsedTeam = JSON.parse(lastTeamJSON);
-      if (Array.isArray(parsedTeam) && parsedTeam.every(name => typeof name === 'string')) {
-        teamNamesToLoad = parsedTeam;
-      }
-    } catch (e) { /* Ignore parsing errors, will load empty team */ }
+  // Pre-populate with the last roll all team
+  const lastTeam = JSON.parse(localStorage.getItem(LAST_ROLL_ALL_TEAM_KEY) || '[]');
+  let prePopulated = false;
+  if (lastTeam && lastTeam.length > 0) {
+    // Clear any existing empty player slots first
+    while (list.children.length > 0) {
+        list.removeChild(list.lastChild);
+    }
+    for (let i = 0; i < lastTeam.length; i++) {
+        if (list.children.length < MAX_PLAYERS) {
+            addPlayer(); // Adds a new inactive player slot
+            const newPlayerItem = list.lastChild;
+            if (newPlayerItem) {
+                const nameInput = newPlayerItem.querySelector('.player-name');
+                nameInput.value = lastTeam[i];
+                // No need to dispatch input event here, updateAllPlayerStates will handle it
+            }
+        }
+    }
+    prePopulated = true;
   }
 
-  if (teamNamesToLoad.length > 0) {
-    teamNamesToLoad.forEach(name => {
-      if (list.children.length < MAX_PLAYERS) {
-        addPlayer(); 
-        const lastPlayerItem = list.lastChild;
-        if (lastPlayerItem) {
-          const nameInput = lastPlayerItem.querySelector('.player-name');
-          if (nameInput) {
-            nameInput.value = name;
-          }
-        }
-      }
-    });
-    // After populating all names, update states, then roll.
-    updateAllPlayerStates(); // Update active states for all pre-populated players
-    rollAll(); 
-  } else {
-    // Fallback: If no last team, add MIN_PLAYERS slots, ensuring at least 1
-    if (list.children.length === 0) { 
-      const initialSlotsToAdd = Math.max(1, MIN_PLAYERS);
-      for (let i = 0; i < initialSlotsToAdd; i++) {
-        if (list.children.length < MAX_PLAYERS) {
-          addPlayer();
-        }
-      }
-    }
+  // If no team was loaded from local storage, add initial MIN_PLAYERS slots
+  if (!prePopulated) {
+    for(let i=0;i<MIN_PLAYERS;i++) addPlayer();
   }
-  
-  renderQuickPopulateButtons(); 
+
+  updateAllPlayerStates(); // This will set initial active states and add new slot if needed
+  updateUI();
   updateQuickPopButtons();
-  updateDiceDots(); 
+  updateDarkModeButtonText(); // Set initial button text
+
+  if (prePopulated && list.children.length > 0) {
+    rollAll(); // Automatically roll all if team was pre-populated
+  }
+
+  // Initialize MutationObserver
+  const observer = new MutationObserver((mutationsList, observer) => {
+    for(const mutation of mutationsList) {
+        if (mutation.type === 'childList') {
+            // When children are added or removed from the list
+            [...list.children].forEach((playerItem, index) => {
+                updateDiceDots(playerItem, index + 1);
+            });
+        }
+    }
+  });
+  observer.observe(list, { childList: true });
+
+  // Initial dice dot update for any players added by default
+  [...list.children].forEach((playerItem, index) => {
+    updateDiceDots(playerItem, index + 1);
+  });
 });
 
 const QUICK_NAMES_STORAGE_KEY = 'rivalsRollerQuickNames';
@@ -846,91 +862,67 @@ function addNameToQuickList(name) { // Updates simple array of strings
 }
 
 function renderQuickPopulateButtons(editMode = false) {
-  const quickRow = document.querySelector('.player-panel .quick-populate-row');
-  if (!quickRow) return;
-  quickRow.innerHTML = ''; 
+  const quickPopRow = document.querySelector('.player-panel .quick-populate-row');
+  if (!quickPopRow) return;
+  quickPopRow.innerHTML = ''; 
   const names = getQuickNames(); // Now a simple array of strings
 
-  names.sort((a, b) => a.localeCompare(b)); // Sort alphabetically
+  const currentPlayers = [...list.children].map(item => item.querySelector('.player-name').value.trim().toLowerCase());
 
-  names.forEach(name => { // name is now a string directly
+  names.forEach(name => {
     const btnContainer = document.createElement('div');
     btnContainer.className = 'quick-pop-btn-container';
-    if (editMode) {
-        btnContainer.classList.add('edit-mode');
-    }
 
-    const btn = document.createElement('button');
-    btn.textContent = name;
-    btn.className = 'quick-pop-btn';
-    if (editMode) {
-        btn.classList.add('edit-mode');
+    const button = document.createElement('button');
+    button.textContent = name;
+    button.className = 'quick-pop-btn';
+    if (currentPlayers.includes(name.toLowerCase())) {
+      button.classList.add('used');
+      button.disabled = true;
     }
-    
-    btn.addEventListener('click', () => {
-      if (editMode) return; // Don't populate if in edit mode
-
-      let playerInputs = [...list.querySelectorAll('input.player-name')];
-      let filled = false;
-      for (let inp of playerInputs) {
-        if (!inp.value.trim()) {
-          inp.value = name;
-          updateQuickPopButtons(); 
-          updateAllPlayerStates(); 
-          const playerItemLi = inp.closest('.player-item'); // Get the li
-          if (playerItemLi && playerItemLi.dataset.active === 'true') singleRoll(playerItemLi); // Auto-roll if active
-          filled = true;
-          break;
-        }
+    button.addEventListener('click', () => {
+      const emptyPlayerSlot = [...list.children].find(item => !item.querySelector('.player-name').value.trim());
+      if (emptyPlayerSlot) {
+        const nameInput = emptyPlayerSlot.querySelector('.player-name');
+        nameInput.value = name;
+        nameInput.dispatchEvent(new Event('input', { bubbles: true })); // Trigger input event to update states
+        updateAllPlayerStates(); // Explicitly call to ensure state is updated for auto-roll
+         if (emptyPlayerSlot.dataset.active === 'true') singleRoll(emptyPlayerSlot);
+      } else if (list.children.length < MAX_PLAYERS) {
+        addPlayer();
+        const newPlayerItem = list.lastChild;
+        const nameInput = newPlayerItem.querySelector('.player-name');
+        nameInput.value = name;
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+        updateAllPlayerStates();
+        if (newPlayerItem.dataset.active === 'true') singleRoll(newPlayerItem);
       }
-      if (!filled && list.children.length < MAX_PLAYERS) {
-        addPlayer(); 
-        let newInput = list.lastChild.querySelector('input.player-name');
-        if (newInput) {
-            newInput.value = name;
-            updateQuickPopButtons(); 
-            updateAllPlayerStates(); 
-            if (list.lastChild && list.lastChild.dataset.active === 'true') singleRoll(list.lastChild); 
-        }
-      }
+      updateQuickPopButtons(); // Re-render to update 'used' state
     });
-
-    btnContainer.appendChild(btn);
+    btnContainer.appendChild(button);
 
     if (editMode) {
       const removeIcon = document.createElement('span');
       removeIcon.className = 'remove-name-icon';
-      removeIcon.innerHTML = '&times;'; // Use &times; for a nice X icon
-      removeIcon.title = 'Remove this name';
+      removeIcon.innerHTML = '<i class="fas fa-xmark"></i>'; // Use Font Awesome icon
+      removeIcon.title = 'Remove this name permanently';
       removeIcon.addEventListener('click', (e) => {
-        e.stopPropagation(); 
-        const nameToRemove = name; // Capture the correct name from the outer scope
-        
-        // 1. Remove from QUICK_NAMES_STORAGE_KEY
-        const currentQuickNames = getQuickNames();
-        const updatedQuickNames = currentQuickNames.filter(n => n !== nameToRemove);
-        saveQuickNames(updatedQuickNames);
+        e.stopPropagation(); // Prevent button click
+        const nameToRemove = name;
+        let storedNames = getQuickNames();
+        storedNames = storedNames.filter(n => n !== nameToRemove);
+        saveQuickNames(storedNames);
 
-        // 2. Remove from LAST_ROLL_ALL_TEAM_KEY
-        const lastTeamJSON = localStorage.getItem(LAST_ROLL_ALL_TEAM_KEY);
-        if (lastTeamJSON) {
-          try {
-            let lastTeam = JSON.parse(lastTeamJSON);
-            if (Array.isArray(lastTeam)) {
-              const updatedLastTeam = lastTeam.filter(n => n !== nameToRemove);
-              localStorage.setItem(LAST_ROLL_ALL_TEAM_KEY, JSON.stringify(updatedLastTeam));
-            }
-          } catch (err) {
-            console.error('Error processing LAST_ROLL_ALL_TEAM_KEY during name removal:', err);
-            // Decide if we want to clear it or leave it if corrupted
-          }
-        }
-        
-        renderQuickPopulateButtons(true); // Re-render buttons in edit mode
+        // Also remove from LAST_ROLL_ALL_TEAM_KEY if present
+        let lastTeam = JSON.parse(localStorage.getItem(LAST_ROLL_ALL_TEAM_KEY) || '[]');
+        lastTeam = lastTeam.filter(n => n !== nameToRemove);
+        localStorage.setItem(LAST_ROLL_ALL_TEAM_KEY, JSON.stringify(lastTeam));
+
+        renderQuickPopulateButtons(true); // Re-render in edit mode
       });
       btnContainer.appendChild(removeIcon);
     }
-    quickRow.appendChild(btnContainer);
+    quickPopRow.appendChild(btnContainer);
   });
   updateQuickPopButtons(); // Update used state for all buttons
 }
