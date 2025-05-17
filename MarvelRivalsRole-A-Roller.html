@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marvel Rivals Roll‑A‑Roller</title>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="logo"><img src="images/logo250px.png" alt="Rivals Assemble  " width="250" height="181"></div>
+  <div class="main">
+    <section class="panel player-panel"><h2>Player List</h2><ul id="playerList" class="player-list"></ul></section>
+    <section class="panel options-panel"><h2>Options</h2>
+      <button id="addBtn">Add Player</button>
+      <button id="rollAllBtn">Roll All</button>
+      <button id="captureBtn">Capture</button>
+      <button id="darkBtn">Dark Mode</button>
+      <label id="lblV"><input type="checkbox" id="allow3V" disabled>Allow 3 Vanguards</label>
+      <label id="lblD"><input type="checkbox" id="allow3D" disabled>Allow 3 Duellists</label>
+      <label id="lblS"><input type="checkbox" id="allow3S" disabled>Allow 3 Strategists</label>
+    </section>
+  </div>
+<script>
+let HEROES_BY_ROLE = {}; // Initialize as empty object
+
+async function loadHeroes() {
+  try {
+    const response = await fetch('data/heroes.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    HEROES_BY_ROLE = await response.json();
+    console.log('Heroes loaded:', HEROES_BY_ROLE);
+  } catch (error) {
+    console.error('Could not load heroes:', error);
+    // Optionally, set some default/empty hero lists or alert the user
+    HEROES_BY_ROLE = {
+      "Strategist": ["Error loading heroes"],
+      "Vanguard": ["Error loading heroes"],
+      "Duellist": ["Error loading heroes"]
+    };
+  }
+}
+
+const MIN_PLAYERS=2,MAX_PLAYERS=6;
+const ICONS={vanguard:'images/VanguardIcon.png',duellist:'images/DuellistIcon.png',strategist:'images/StrategistIcon.png',flex:'images/FlexIcon.png'};
+const BASE_ROLES=['vanguard','duellist','strategist'];
+const list=document.getElementById('playerList');
+const addBtn=document.getElementById('addBtn');
+const rollAllBtn=document.getElementById('rollAllBtn');
+const captureBtn=document.getElementById('captureBtn');
+const darkBtn=document.getElementById('darkBtn');
+const allow3CB={vanguard:allow3V,duellist:allow3D,strategist:allow3S};
+const allow3LBL={vanguard:lblV,duellist:lblD,strategist:lblS};
+const rng=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rng(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;};
+const flexChance=()=>Math.random()<0.05;
+const capFor=r=>r==='flex'?MAX_PLAYERS:(allow3CB[r].checked?3:2);
+
+function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.innerHTML=`<button class="remove" title="Remove">×</button><input type="text" placeholder="Name"><button class="roll" title="Roll">🎲</button><div class="role"><img class="role-icon"><span>No Role</span> - <span class="suggested-hero"></span></div>`;li.dataset.lastRole='';li.dataset.streak='0';li.querySelector('.remove').addEventListener('click',()=>{li.remove();updateUI();});li.querySelector('.roll').addEventListener('click',()=>singleRoll(li));list.append(li);updateUI();}
+function currentCounts(){const c={vanguard:0,duellist:0,strategist:0,flex:0};[...list.children].forEach(li=>{const r=li.dataset.lastRole;if(r)c[r]++;});return c;}
+function updateUI(){const c=list.children.length;addBtn.disabled=c>=MAX_PLAYERS;addBtn.classList.toggle('disabled',addBtn.disabled);list.querySelectorAll('.remove').forEach(b=>{b.disabled=c<=MIN_PLAYERS;b.classList.toggle('disabled',b.disabled);});const en=c>=3;Object.keys(allow3CB).forEach(r=>{allow3CB[r].disabled=!en;allow3LBL[r].classList.toggle('disabled',allow3CB[r].disabled);});}
+
+function weightedDifferentRole(li, counts, prioritizeMissingBaseRoles = false){
+  const last=li.dataset.lastRole,streak=parseInt(li.dataset.streak||'0',10);
+  let role;
+  let tries=0;
+
+  if (prioritizeMissingBaseRoles) {
+    const baseRolesNeeded = BASE_ROLES.filter(r => counts[r] === 0);
+    if (baseRolesNeeded.length > 0) {
+       // Prioritize assigning a needed base role if we haven't assigned one of each yet
+       shuffle(baseRolesNeeded);
+       return baseRolesNeeded[0];
+    }
+  }
+
+  // If not prioritizing or all base roles are covered, proceed with original weighted logic
+  do{
+    role=flexChance()? 'flex': BASE_ROLES[rng(0,2)];
+    if(role===last){
+      if(Math.random()<0.7)continue;
+    }
+    if(counts[role]>=capFor(role))continue;
+
+    if(role===last&&streak>=2)continue;
+    break;
+  }while(++tries<40);
+
+  return role;
+}
+function applyRole(li,role){
+  li.querySelector('.role-icon').src=ICONS[role];
+  const roleSpan = li.querySelector('.role span');
+  const heroSpan = li.querySelector('.suggested-hero');
+
+  roleSpan.textContent=role.charAt(0).toUpperCase()+role.slice(1);
+
+  // Suggest a random hero for base roles
+  if (BASE_ROLES.includes(role)) {
+    const heroList = HEROES_BY_ROLE[role.charAt(0).toUpperCase() + role.slice(1)]; // Get the list for the role
+    if (heroList && heroList.length > 0) {
+      const randomHero = heroList[rng(0, heroList.length - 1)]; // Select random hero
+      heroSpan.textContent = `- ${randomHero}`;
+    } else {
+      heroSpan.textContent = '- No heroes listed'; // Fallback if list is empty/missing
+    }
+  } else {
+    // Handle Flex or other potential roles (currently only Flex is expected)
+    heroSpan.textContent = ''; // Clear hero for Flex or no role
+  }
+
+  const last=li.dataset.lastRole;
+  li.dataset.streak=(role===last?parseInt(li.dataset.streak||'0',10)+1:1);
+  li.dataset.lastRole=role;
+}
+function singleRoll(li){
+  const counts=currentCounts();
+  counts[li.dataset.lastRole]--;
+  let newRole;
+  let tries = 0;
+  do {
+    newRole = weightedDifferentRole(li, counts, false); // Explicitly pass false for single rolls
+    tries++;
+  } while (newRole === li.dataset.lastRole && tries < 40);
+  applyRole(li, newRole);
+}
+function rollAll(){const players=[...list.children];const counts={vanguard:0,duellist:0,strategist:0,flex:0};players.forEach(li=>{
+  // Use weightedDifferentRole with prioritization flag set to true for full rolls
+  const role=weightedDifferentRole(li, counts, true);
+  counts[role]++;applyRole(li,role);});}
+function capture(){
+  const players = [...list.children];
+  if(players.length === 0) {
+    alert('No players to copy!');
+    return;
+  }
+  let text = 'Marvel Rivals Roles:';
+  players.forEach(li => {
+    const name = li.querySelector('input').value.trim() || 'Player';
+    const role = li.querySelector('.role span').textContent;
+    text += `\n${name}: ${role}`;
+  });
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Player roles copied to clipboard!');
+  }, () => {
+    alert('Failed to copy to clipboard.');
+  });
+}
+
+// Initialize the application after DOM is loaded and heroes are fetched
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadHeroes(); // Wait for heroes to load
+
+  for(const cb of Object.values(allow3CB))cb.addEventListener('change',rollAll);
+  addBtn.addEventListener('click',addPlayer);
+  rollAllBtn.addEventListener('click',rollAll);
+  captureBtn.addEventListener('click',capture);
+  darkBtn.addEventListener('click',()=>document.body.classList.toggle('dark-mode'));
+  addPlayer();addPlayer(); // Initial players
+
+  // Quick populate buttons setup
+  const quickRow = document.querySelector('.quick-populate-row');
+  const QUICK_NAMES = [
+    'Aaron', 'Brad', 'Eb', 'James', 'Joel', 'Jorge', 'Lloyd', 'Max', 'Nic', 'Ra', 'Zac'
+  ];
+  QUICK_NAMES.forEach(name => {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.className = 'quick-pop-btn';
+    btn.addEventListener('click', () => {
+      let playerInputs = [...list.querySelectorAll('input')];
+      let filled = false;
+      for (let inp of playerInputs) {
+        if (!inp.value.trim()) {
+          inp.value = name;
+          filled = true;
+          break;
+        }
+      }
+      if (!filled && list.children.length < MAX_PLAYERS) {
+        addPlayer();
+        let newInput = list.lastChild.querySelector('input');
+        if (newInput) newInput.value = name;
+      }
+    });
+    quickRow.appendChild(btn);
+  });
+});
+</script>
+<div class="quick-populate-row">
+</div>
+<style>
+.quick-populate-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+.quick-pop-btn {
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5em 1.1em;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin-bottom: 0.2em;
+}
+.quick-pop-btn:hover {
+  background: #333;
+  transform: translateY(-2px);
+}
+</style>
+</body>
+</html>
