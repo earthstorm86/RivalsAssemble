@@ -15,16 +15,21 @@ A web-based tool for randomizing player roles for Marvel Rivals matches. Support
 - HTML cleaned up and now links to the external stylesheet.
 
 ## Usage
-1. Open `MarvelRivalsRole-A-Roller.html` in your web browser (double-click or right-click and choose "Open with" > your browser).
+1. Open `index.html` in your web browser (double-click or right-click and choose "Open with" > your browser).
 2. Add player names using the "Add Player" button.
 3. Click "Roll All" to assign roles, or use the dice button for individual rolls.
 4. Use the options panel to toggle dark mode or capture the current state.
 
 ## File Structure
-- `MarvelRivalsRole-A-Roller.html` – Main application HTML and JavaScript
-- `style.css` – All styles for the app
-- `*Icon.png` – Role icons
-- `Logo.jpg` – App logo
+- `index.html` – Main application HTML and JavaScript
+- `css/style.css` – All styles for the app
+- `images/FlexIcon.png` – Flex role icon
+- `images/VanguardIcon.png` – Vanguard role icon
+- `images/StrategistIcon.png` – Strategist role icon
+- `images/DuellistIcon.png` – Duellist role icon
+- `images/logo.png` – App logo (large)
+- `images/logo250px.png` – App logo (250px)
+- `images/Logo.jpg` – App logo (old, to be deprecated or removed)
 
 ---
 

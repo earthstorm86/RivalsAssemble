@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="logo"><img src="images/logo250px.png" alt="Rivals Assemble  " width="250" height="181"></div>
+  <div class="logo"><img src="images/logo-small.png" alt="Rivals Assemble  " width="237" height="177"></div>
   <div class="main">
     <section class="panel player-panel"><h2>Player List</h2><ul id="playerList" class="player-list"></ul></section>
     <section class="panel options-panel"><h2>Options</h2>
@@ -16,12 +16,49 @@
       <button id="rollAllBtn">Roll All</button>
       <button id="captureBtn">Capture</button>
       <button id="darkBtn">Dark Mode</button>
-      <label id="lblV"><input type="checkbox" id="allow3V" disabled>Allow 3 Vanguards</label>
-      <label id="lblD"><input type="checkbox" id="allow3D" disabled>Allow 3 Duellists</label>
-      <label id="lblS"><input type="checkbox" id="allow3S" disabled>Allow 3 Strategists</label>
+      <div class="role-options-section">
+        <h3>Minimums</h3>
+        <div id="minimumsWarning" class="warning-message"></div>
+        <div class="min-inputs-grid">
+          <div class="option-group">
+            <label for="vanguardMin">Vanguard</label>
+            <div class="min-input-controls">
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="vanguardMin" value="1" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+          </div>
+          <div class="option-group">
+            <label for="duellistMin">Duellist</label>
+            <div class="min-input-controls">
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="duellistMin" value="2" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+          </div>
+          <div class="option-group">
+            <label for="strategistMin">Strategist</label>
+            <div class="min-input-controls">
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="strategistMin" value="2" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+          </div>
+          <div class="option-group">
+            <label for="flexMin">Flex</label>
+            <div class="min-input-controls">
+              <button class="min-adjust-btn" data-direction="decrement">-</button>
+              <input type="number" id="flexMin" value="0" min="0" max="6">
+              <button class="min-adjust-btn" data-direction="increment">+</button>
+            </div>
+          </div>
+        </div>
+        <label id="lblAutoSort"><input type="checkbox" id="autoSortCB" checked>Auto Sort Roles</label>
+      </div>
     </section>
   </div>
 <script>
+const ANIMATE_ROLL_ALL_SORT = false; // Config option for animating sort on Roll All
 let HEROES_BY_ROLE = {}; // Initialize as empty object
 
 async function loadHeroes() {
@@ -51,48 +88,126 @@ const addBtn=document.getElementById('addBtn');
 const rollAllBtn=document.getElementById('rollAllBtn');
 const captureBtn=document.getElementById('captureBtn');
 const darkBtn=document.getElementById('darkBtn');
-const allow3CB={vanguard:allow3V,duellist:allow3D,strategist:allow3S};
-const allow3LBL={vanguard:lblV,duellist:lblD,strategist:lblS};
+const vanguardMinInput = document.getElementById('vanguardMin');
+const duellistMinInput = document.getElementById('duellistMin');
+const strategistMinInput = document.getElementById('strategistMin');
+const flexMinInput = document.getElementById('flexMin');
+const autoSortCB = document.getElementById('autoSortCB');
 const rng=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rng(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;};
 const flexChance=()=>Math.random()<0.05;
-const capFor=r=>r==='flex'?MAX_PLAYERS:(allow3CB[r].checked?3:2);
 
-function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.innerHTML=`<button class="remove" title="Remove">×</button><input type="text" placeholder="Name"><button class="roll" title="Roll">🎲</button><div class="role"><img class="role-icon"><span>No Role</span> - <span class="suggested-hero"></span></div>`;li.dataset.lastRole='';li.dataset.streak='0';li.querySelector('.remove').addEventListener('click',()=>{li.remove();updateUI();});li.querySelector('.roll').addEventListener('click',()=>singleRoll(li));list.append(li);updateUI();}
+function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.innerHTML=`
+  <button class="remove" title="Remove">×</button>
+  <input class="player-name" type="text" placeholder="Name">
+  <div class="role-info">
+    <img class="role-icon" src="">
+    <span class="role-name">No Role</span>
+    <span class="suggested-hero"></span>
+  </div>
+  <button class="roll" title="Roll">🎲</button>
+`;li.dataset.lastRole='';li.dataset.streak='0';li.querySelector('.remove').addEventListener('click',()=>{li.remove();updateUI();updateQuickPopButtons();});li.querySelector('.roll').addEventListener('click',()=>singleRoll(li));
+// Add event listener to input for name changes
+li.querySelector('input[type="text"]').addEventListener('input', updateQuickPopButtons);
+
+list.append(li);updateUI();updateQuickPopButtons();}
 function currentCounts(){const c={vanguard:0,duellist:0,strategist:0,flex:0};[...list.children].forEach(li=>{const r=li.dataset.lastRole;if(r)c[r]++;});return c;}
-function updateUI(){const c=list.children.length;addBtn.disabled=c>=MAX_PLAYERS;addBtn.classList.toggle('disabled',addBtn.disabled);list.querySelectorAll('.remove').forEach(b=>{b.disabled=c<=MIN_PLAYERS;b.classList.toggle('disabled',b.disabled);});const en=c>=3;Object.keys(allow3CB).forEach(r=>{allow3CB[r].disabled=!en;allow3LBL[r].classList.toggle('disabled',allow3CB[r].disabled);});}
+function updateUI(){const c=list.children.length;addBtn.disabled=c>=MAX_PLAYERS;addBtn.classList.toggle('disabled',addBtn.disabled);list.querySelectorAll('.remove').forEach(b=>{b.disabled=c<=MIN_PLAYERS;
+// b.style.display = c <= MIN_PLAYERS ? 'none' : ''; // Removed hiding the button
+b.classList.toggle('disabled',b.disabled);});}
 
-function weightedDifferentRole(li, counts, prioritizeMissingBaseRoles = false){
+// Function to display a temporary message below the minimums heading
+function displayTemporaryMessage(message) {
+  const warningElement = document.getElementById('minimumsWarning');
+  if (warningElement) {
+    warningElement.textContent = message;
+    warningElement.style.display = 'block'; // Make it visible
+
+    setTimeout(() => {
+      warningElement.textContent = '';
+      warningElement.style.display = 'none'; // Hide it after 3 seconds
+    }, 3000);
+  }
+}
+
+function validateAndAdjustMinimums(changedInput) {
+  const currentMinimums = {
+    vanguard: parseInt(vanguardMinInput.value) || 0,
+    duellist: parseInt(duellistMinInput.value) || 0,
+    strategist: parseInt(strategistMinInput.value) || 0,
+    flex: parseInt(flexMinInput.value) || 0
+  };
+  const sumOfMinimums = Object.values(currentMinimums).reduce((sum, val) => sum + val, 0);
+
+  if (sumOfMinimums > 6) {
+    const excess = sumOfMinimums - 6;
+    let changedInputValue = parseInt(changedInput.value) || 0;
+    let newChangedValue = changedInputValue - excess;
+
+    if (newChangedValue < 0) newChangedValue = 0; // Ensure it doesn't go below 0
+    changedInput.value = newChangedValue;
+
+    // Display warning message instead of alert
+    const roleName = changedInput.id.replace('Min', '');
+    displayTemporaryMessage(`Sum of minimums cannot exceed 6. ${roleName.charAt(0).toUpperCase() + roleName.slice(1)} Min has been adjusted.`);
+  }
+}
+
+function weightedDifferentRole(li, counts, minimums) {
   const last=li.dataset.lastRole,streak=parseInt(li.dataset.streak||'0',10);
   let role;
   let tries=0;
+  // Include flex in roles that can have minimums
+  const allRolesWithMinimums = [...BASE_ROLES, 'flex'];
 
-  if (prioritizeMissingBaseRoles) {
-    const baseRolesNeeded = BASE_ROLES.filter(r => counts[r] === 0);
-    if (baseRolesNeeded.length > 0) {
-       // Prioritize assigning a needed base role if we haven't assigned one of each yet
-       shuffle(baseRolesNeeded);
-       return baseRolesNeeded[0];
-    }
+  // 1. Prioritize roles that are below their specified minimums
+  const rolesNeededForMinimums = allRolesWithMinimums.filter(r => counts[r] < minimums[r]);
+  if (rolesNeededForMinimums.length > 0) {
+    shuffle(rolesNeededForMinimums);
+    return rolesNeededForMinimums[0]; // Assign a role needed to meet minimums
   }
 
-  // If not prioritizing or all base roles are covered, proceed with original weighted logic
-  do{
-    role=flexChance()? 'flex': BASE_ROLES[rng(0,2)];
-    if(role===last){
-      if(Math.random()<0.7)continue;
+  // 2. If minimums are met, proceed with other logic
+  do {
+    // Consider Flex role if its minimum is met (or is 0) and by chance
+    if (minimums['flex'] <= counts['flex'] && flexChance() && counts['flex'] < MAX_PLAYERS) {
+      role = 'flex';
+    } else {
+      let eligibleBaseRoles = BASE_ROLES.filter(r => counts[r] < MAX_PLAYERS && minimums[r] <= counts[r]);
+      if (eligibleBaseRoles.length === 0) { 
+          // If no base roles are eligible (e.g., all at min/max), try flex if it's not at max and its min is met
+          if (counts['flex'] < MAX_PLAYERS && minimums['flex'] <= counts['flex']) {
+            role = 'flex';
+          } else {
+            // Fallback: if even flex is not an option, pick any available base role not at MAX_PLAYERS
+            // This case should be rare if minimums are set reasonably (not exceeding MAX_PLAYERS)
+            let fallbackRoles = BASE_ROLES.filter(r => counts[r] < MAX_PLAYERS);
+            if (fallbackRoles.length > 0) role = fallbackRoles[rng(0, fallbackRoles.length-1)];
+            else role = 'flex'; // Absolute fallback if all base roles somehow hit MAX_PLAYERS
+          }
+      } else {
+          role = eligibleBaseRoles[rng(0, eligibleBaseRoles.length - 1)];
+      }
     }
-    if(counts[role]>=capFor(role))continue;
 
-    if(role===last&&streak>=2)continue;
-    break;
-  }while(++tries<40);
+    // Streak prevention
+    if (role === last && streak >= 2) {
+      if (Math.random() < 0.7) continue; // 70% chance to reroll if on a 2+ streak of same role
+    }
+    
+    // Ensure we don't exceed overall player count for a role if it had a hard cap (currently just MAX_PLAYERS)
+    // This is mostly covered by the initial filter for eligibleBaseRoles and flex check.
+
+    break; // Found a suitable role
+  } while (++tries < 50); // Increased tries for more complex logic
 
   return role;
 }
 function applyRole(li,role){
-  li.querySelector('.role-icon').src=ICONS[role];
-  const roleSpan = li.querySelector('.role span');
+  const iconImg = li.querySelector('.role-icon');
+  iconImg.src = ICONS[role];
+  iconImg.style.display = 'inline-block'; // Make icon visible
+  const roleSpan = li.querySelector('.role-name'); // Updated selector
   const heroSpan = li.querySelector('.suggested-hero');
 
   roleSpan.textContent=role.charAt(0).toUpperCase()+role.slice(1);
@@ -102,9 +217,9 @@ function applyRole(li,role){
     const heroList = HEROES_BY_ROLE[role.charAt(0).toUpperCase() + role.slice(1)]; // Get the list for the role
     if (heroList && heroList.length > 0) {
       const randomHero = heroList[rng(0, heroList.length - 1)]; // Select random hero
-      heroSpan.textContent = `- ${randomHero}`;
+      heroSpan.textContent = `${randomHero}`;
     } else {
-      heroSpan.textContent = '- No heroes listed'; // Fallback if list is empty/missing
+      heroSpan.textContent = 'No heroes listed'; // Fallback if list is empty/missing
     }
   } else {
     // Handle Flex or other potential roles (currently only Flex is expected)
@@ -120,16 +235,44 @@ function singleRoll(li){
   counts[li.dataset.lastRole]--;
   let newRole;
   let tries = 0;
+  const minimums = { 
+    vanguard: parseInt(vanguardMinInput.value) || 0, 
+    duellist: parseInt(duellistMinInput.value) || 0, 
+    strategist: parseInt(strategistMinInput.value) || 0,
+    flex: parseInt(flexMinInput.value) || 0
+  };
   do {
-    newRole = weightedDifferentRole(li, counts, false); // Explicitly pass false for single rolls
+    newRole = weightedDifferentRole(li, counts, minimums);
     tries++;
   } while (newRole === li.dataset.lastRole && tries < 40);
   applyRole(li, newRole);
+  if (autoSortCB.checked) {
+    sortPlayers(li, true); // Pass rolled LI and true to animate
+  }
 }
-function rollAll(){const players=[...list.children];const counts={vanguard:0,duellist:0,strategist:0,flex:0};players.forEach(li=>{
-  // Use weightedDifferentRole with prioritization flag set to true for full rolls
-  const role=weightedDifferentRole(li, counts, true);
-  counts[role]++;applyRole(li,role);});}
+function rollAll(){
+  const players=[...list.children];
+  const counts={vanguard:0,duellist:0,strategist:0,flex:0};
+  const minimums = { 
+    vanguard: parseInt(vanguardMinInput.value) || 0, 
+    duellist: parseInt(duellistMinInput.value) || 0, 
+    strategist: parseInt(strategistMinInput.value) || 0,
+    flex: parseInt(flexMinInput.value) || 0
+  };
+
+  let playersToAssign = [...players];
+  let assignedCounts = {vanguard:0,duellist:0,strategist:0,flex:0};
+
+  playersToAssign.forEach(pLi => {
+      const role = weightedDifferentRole(pLi, assignedCounts, minimums);
+      applyRole(pLi, role);
+      assignedCounts[role]++;
+  });
+  
+  if (autoSortCB.checked) { 
+    sortPlayers(null, ANIMATE_ROLL_ALL_SORT); // Pass null and config for animation
+  }
+}
 function capture(){
   const players = [...list.children];
   if(players.length === 0) {
@@ -139,8 +282,9 @@ function capture(){
   let text = 'Marvel Rivals Roles:';
   players.forEach(li => {
     const name = li.querySelector('input').value.trim() || 'Player';
-    const role = li.querySelector('.role span').textContent;
-    text += `\n${name}: ${role}`;
+    const role = li.querySelector('.role-name').textContent;
+    const suggestedHero = li.querySelector('.suggested-hero').textContent.trim();
+    text += `\n${name}: ${role}${suggestedHero ? ' ' + suggestedHero : ''}`;
   });
   navigator.clipboard.writeText(text).then(() => {
     alert('Player roles copied to clipboard!');
@@ -149,16 +293,176 @@ function capture(){
   });
 }
 
+// Function to sort players by role (Vanguard, Duellist, Strategist, Flex)
+function sortPlayers(rolledLiElement = null, animateThisSort = true) {
+  if (!autoSortCB.checked) { // If auto-sort is off, just do a simple sort and return
+    const players = [...list.children];
+    const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
+    players.sort((a, b) => {
+      const roleA = a.dataset.lastRole.toLowerCase();
+      const roleB = b.dataset.lastRole.toLowerCase();
+      const indexA = roleOrder.indexOf(roleA);
+      const indexB = roleOrder.indexOf(roleB);
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    players.forEach(player => list.appendChild(player));
+    return;
+  }
+
+  if (!animateThisSort) { // If this specific sort call shouldn't be animated (e.g. Roll All with config off)
+    const players = [...list.children];
+    const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
+    players.sort((a, b) => {
+      const roleA = a.dataset.lastRole.toLowerCase();
+      const roleB = b.dataset.lastRole.toLowerCase();
+      const indexA = roleOrder.indexOf(roleA);
+      const indexB = roleOrder.indexOf(roleB);
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    players.forEach(player => list.appendChild(player));
+    return;
+  }
+
+  const playersLiElements = [...list.children];
+  const oldPositions = new Map();
+
+  // 1. First: Record initial positions (offsetTop relative to the list)
+  playersLiElements.forEach(li => {
+    oldPositions.set(li, li.offsetTop);
+  });
+
+  // --- Actual Sorting (JS array sort) ---
+  const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
+  const originalRolledIndex = rolledLiElement ? playersLiElements.indexOf(rolledLiElement) : -1;
+
+  const sortedPlayerLiElements = [...playersLiElements].sort((a, b) => {
+    const roleA = a.dataset.lastRole.toLowerCase();
+    const roleB = b.dataset.lastRole.toLowerCase();
+    const indexA = roleOrder.indexOf(roleA);
+    const indexB = roleOrder.indexOf(roleB);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  // --- Update DOM Order ---
+  sortedPlayerLiElements.forEach(li => list.appendChild(li));
+
+  const newRolledIndex = rolledLiElement ? sortedPlayerLiElements.indexOf(rolledLiElement) : -1;
+  const rolledCardMoved = originalRolledIndex !== -1 && newRolledIndex !== -1 && originalRolledIndex !== newRolledIndex;
+
+  // Apply a temporary highlight to the rolled card, regardless of movement for single rolls
+  if (rolledLiElement && animateThisSort) { // animateThisSort is true for single rolls
+    rolledLiElement.classList.add('rolled-highlight');
+    setTimeout(() => {
+      rolledLiElement.classList.remove('rolled-highlight');
+    }, 700); // Highlight duration
+  }
+
+  // --- Invert & Play ---
+  sortedPlayerLiElements.forEach(li => {
+    const oldTop = oldPositions.get(li);
+    if (typeof oldTop !== 'number') return; 
+
+    const newTop = li.offsetTop;
+    const deltaY = oldTop - newTop;
+
+    li.style.transition = 'none'; // Disable transitions for the setup
+    let transformStyle = `translateY(${deltaY}px)`;
+
+    if (li === rolledLiElement && rolledCardMoved) { // Only scale and elevate if it actually moved
+      li.style.zIndex = '10';
+      transformStyle += ' scale(1.05)';
+    }
+    li.style.transform = transformStyle;
+  });
+
+  // Force reflow to apply the transform styles before starting the animation
+  void list.offsetWidth;
+
+  // Play: Transition to new positions
+  sortedPlayerLiElements.forEach(li => {
+    li.style.transition = 'transform 0.5s ease-in-out';
+    if (li === rolledLiElement && rolledCardMoved) { // Ensure z-index also transitions if it was changed
+      li.style.transition = 'transform 0.5s ease-in-out, z-index 0s linear 0.5s';
+    }
+    li.style.transform = 'translateY(0px) scale(1)';
+
+    li.addEventListener('transitionend', function handler() {
+      li.style.transition = '';
+      if (li === rolledLiElement && rolledCardMoved) { // Only reset zIndex if it was set
+        li.style.zIndex = '';
+      }
+      // Keep transform at scale(1) translateY(0) - it's the natural state now
+      li.removeEventListener('transitionend', handler);
+    }, { once: true });
+  });
+}
+
 // Initialize the application after DOM is loaded and heroes are fetched
 document.addEventListener('DOMContentLoaded', async () => {
   await loadHeroes(); // Wait for heroes to load
 
-  for(const cb of Object.values(allow3CB))cb.addEventListener('change',rollAll);
+  // Default to dark mode
+  document.body.classList.add('dark-mode');
+
   addBtn.addEventListener('click',addPlayer);
   rollAllBtn.addEventListener('click',rollAll);
   captureBtn.addEventListener('click',capture);
   darkBtn.addEventListener('click',()=>document.body.classList.toggle('dark-mode'));
+
+  // Add event listeners for minimum input validation
+  [vanguardMinInput, duellistMinInput, strategistMinInput, flexMinInput].forEach(input => {
+    input.addEventListener('input', () => validateAndAdjustMinimums(input));
+  });
+
+  // Add event listeners for the min adjustment buttons
+  document.querySelectorAll('.min-adjust-btn').forEach(button => {
+    button.addEventListener('click', () => {
+      const input = button.closest('.option-group').querySelector('input[type="number"]');
+      const direction = button.dataset.direction;
+      const currentValue = parseInt(input.value) || 0;
+      const step = parseInt(input.step) || 1; // Get step from input, default to 1
+      const minValue = parseInt(input.min) || 0; // Get min from input, default to 0
+      const maxValue = parseInt(input.max) || 6; // Get max from input, default to 6 (or MAX_PLAYERS if applicable? using 6 for now)
+
+      let newValue;
+      if (direction === 'increment') {
+        newValue = currentValue + step;
+      } else {
+        newValue = currentValue - step;
+      }
+
+      // Check individual min/max bounds first
+      if (newValue >= minValue && newValue <= maxValue) {
+        // If incrementing, check sum constraint before applying
+        if (direction === 'increment') {
+            const currentMinimumsSum = parseInt(vanguardMinInput.value || 0) + parseInt(duellistMinInput.value || 0) + parseInt(strategistMinInput.value || 0) + parseInt(flexMinInput.value || 0);
+            const proposedSum = currentMinimumsSum - currentValue + newValue; // Subtract old value, add new
+            if (proposedSum > MAX_PLAYERS) { // Use MAX_PLAYERS (6) for sum limit
+                displayTemporaryMessage(`Sum of minimums cannot exceed ${MAX_PLAYERS}.`);
+                return; // Don't update if sum exceeds limit
+            }
+        }
+        
+        input.value = newValue;
+        // Trigger the input event programmatically to run validateAndAdjustMinimums and updateQuickPopButtons
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  });
+
   addPlayer();addPlayer(); // Initial players
+
+  // Function to update the state of quick populate buttons
+  updateQuickPopButtons(); // Initial call after players are added
 
   // Quick populate buttons setup
   const quickRow = document.querySelector('.quick-populate-row');
@@ -187,34 +491,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     quickRow.appendChild(btn);
   });
+
+  // Function to update the state of quick populate buttons
+  updateQuickPopButtons();
 });
+
+// Function to update the state of quick populate buttons
+function updateQuickPopButtons() {
+  const playerNames = [...list.querySelectorAll('input')].map(input => input.value.trim()).filter(name => name !== '');
+  const quickPopButtons = document.querySelectorAll('.quick-pop-btn');
+
+  quickPopButtons.forEach(button => {
+    const name = button.textContent;
+    if (playerNames.includes(name)) {
+      button.classList.add('used');
+      button.disabled = true; // Disable the button functionality
+    } else {
+      button.classList.remove('used');
+      button.disabled = false; // Enable the button functionality
+    }
+  });
+}
 </script>
 <div class="quick-populate-row">
 </div>
-<style>
-.quick-populate-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: center;
-  margin-top: 2rem;
-}
-.quick-pop-btn {
-  background: #111;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.5em 1.1em;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-  margin-bottom: 0.2em;
-}
-.quick-pop-btn:hover {
-  background: #333;
-  transform: translateY(-2px);
-}
-</style>
 </body>
 </html>
