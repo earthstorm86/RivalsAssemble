@@ -43,10 +43,9 @@
             <button class="min-adjust-btn" data-direction="increment">+</button>
           </div>
           <div id="minimumsWarning" class="warning-message"></div>
-
         </div>
         <label id="lblAutoSort"><input type="checkbox" id="autoSortCB" checked>Auto Sort Roles</label>
-      </div>
+        <label id="lblRotateRoles"><input type="checkbox" id="rotateRolesCB" checked>Rotate Roles on Reroll</label>      </div>
     </section>
   </div>
 <script>
@@ -90,6 +89,7 @@ const duellistMinInput = document.getElementById('duellistMin');
 const strategistMinInput = document.getElementById('strategistMin');
 const flexMinInput = document.getElementById('flexMin');
 const autoSortCB = document.getElementById('autoSortCB');
+const rotateRolesCB = document.getElementById('rotateRolesCB');
 const rng=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rng(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;};
 const flexChance=()=>Math.random()<0.05;
@@ -262,62 +262,117 @@ function validateAndAdjustMinimums(changedInput) {
   if (currentRoleCounts.strategist < finalMinimums.strategist) needsReroll = true;
   if (currentRoleCounts.flex < finalMinimums.flex) needsReroll = true;
   
+  // Log values for debugging
+  console.log("--- Min Change Check ---");
+  console.log("Final Minimums:", JSON.stringify(finalMinimums));
+  console.log("Current Role Counts:", JSON.stringify(currentRoleCounts));
+  console.log("Needs Reroll Flag Before Check:", needsReroll);
+
   const activePlayers = [...list.children].filter(li => li.dataset.active === 'true');
-  if (needsReroll && activePlayers.length > 0) {
-    displayTemporaryMessage('Minimums changed, rerolling all players...');
+  const sumOfFinalMinimums = Object.values(finalMinimums).reduce((sum, val) => sum + val, 0);
+
+  console.log("Active Players Count:", activePlayers.length);
+  console.log("Sum of Final Minimums:", sumOfFinalMinimums);
+
+  // Only reroll if needed AND it's possible to satisfy the sum of minimums with the current player count
+  if (needsReroll && activePlayers.length > 0 && activePlayers.length >= sumOfFinalMinimums) {
+    displayTemporaryMessage('Minimums changed and are satisfiable, rerolling all players...');
     rollAll();
+  } else if (needsReroll && activePlayers.length > 0 && activePlayers.length < sumOfFinalMinimums) {
+    displayTemporaryMessage('Minimums changed, but cannot be met with current player count.');
+    console.log("Reroll skipped: Not enough active players to meet the sum of new minimums.");
   }
 }
 
 function weightedDifferentRole(li, counts, minimums) {
-  const last=li.dataset.lastRole,streak=parseInt(li.dataset.streak||'0',10);
-  let role;
-  let tries=0;
-  // Include flex in roles that can have minimums
+  const lastRole = li.dataset.lastRole;
+  const streak = parseInt(li.dataset.streak || '0', 10);
+  let newRole;
+  let tries = 0;
   const allRolesWithMinimums = [...BASE_ROLES, 'flex'];
 
-  // 1. Prioritize roles that are below their specified minimums
+  // 1. Check if any role is now below its minimum due to this player's role being removed from 'counts'.
+  //    'counts' is the team's role distribution *before* this player gets a new role (i.e., their old role slot is vacant).
   const rolesNeededForMinimums = allRolesWithMinimums.filter(r => counts[r] < minimums[r]);
   if (rolesNeededForMinimums.length > 0) {
+    // If player's lastRole is one of the critically needed roles, or if not rotating, prioritize it.
+    // Otherwise, pick from any of the needed roles.
+    // This ensures minimums are strictly met first.
     shuffle(rolesNeededForMinimums);
-    return rolesNeededForMinimums[0]; // Assign a role needed to meet minimums
+    newRole = rolesNeededForMinimums[0]; 
+    // Apply streak prevention here if the only way to meet minimums is to repeat the last role.
+    if (newRole === lastRole && streak >= 2) {
+        if (Math.random() < 0.7 && rolesNeededForMinimums.length === 1 && rolesNeededForMinimums[0] === lastRole) {
+            // Highly constrained: only one role fixes minimums, and it's a streak.
+            // We are forced to pick it. Or, if there were other options in rolesNeededForMinimums, shuffle might pick a different one.
+        } else if (rolesNeededForMinimums.length > 1) {
+            // Try to pick a different needed role if lastRole was also needed
+            let otherNeededRoles = rolesNeededForMinimums.filter(r => r !== lastRole);
+            if (otherNeededRoles.length > 0) {
+                shuffle(otherNeededRoles);
+                newRole = otherNeededRoles[0];
+            }
+        }
+    }
+    applyRole(li, newRole);
+    return newRole; // Exit early, minimums dictated the choice.
   }
 
-  // 2. If minimums are met, proceed with other logic
+  // If we are here, all minimums are currently met by the team composition in 'counts'.
+  // Now, try to select a role, respecting Rotate Roles preference.
   do {
-    // Consider Flex role if its minimum is met (or is 0) and by chance
-    if (minimums['flex'] <= counts['flex'] && flexChance() && counts['flex'] < MAX_PLAYERS) {
-      role = 'flex';
-    } else {
-      let eligibleBaseRoles = BASE_ROLES.filter(r => counts[r] < MAX_PLAYERS && minimums[r] <= counts[r]);
-      if (eligibleBaseRoles.length === 0) { 
-          // If no base roles are eligible (e.g., all at min/max), try flex if it's not at max and its min is met
-          if (counts['flex'] < MAX_PLAYERS && minimums['flex'] <= counts['flex']) {
-            role = 'flex';
-          } else {
-            // Fallback: if even flex is not an option, pick any available base role not at MAX_PLAYERS
-            // This case should be rare if minimums are set reasonably (not exceeding MAX_PLAYERS)
-            let fallbackRoles = BASE_ROLES.filter(r => counts[r] < MAX_PLAYERS);
-            if (fallbackRoles.length > 0) role = fallbackRoles[rng(0, fallbackRoles.length-1)];
-            else role = 'flex'; // Absolute fallback if all base roles somehow hit MAX_PLAYERS
-          }
-      } else {
-          role = eligibleBaseRoles[rng(0, eligibleBaseRoles.length - 1)];
+    tries++;
+    let candidateRoles = [];
+    allRolesWithMinimums.forEach(r => {
+      // A role is a candidate if there's space for it, and its own minimum is currently met by the team.
+      if (counts[r] < MAX_PLAYERS && minimums[r] <= counts[r]) {
+        candidateRoles.push(r);
+      }
+    });
+
+    // Add Flex by chance if it's not already a candidate due to its own min (e.g., flexMin=0)
+    // and it has space and its minimum is met.
+    if (flexChance() && !candidateRoles.includes('flex') && counts['flex'] < MAX_PLAYERS && minimums['flex'] <= counts['flex']) {
+      candidateRoles.push('flex');
+    }
+
+    if (candidateRoles.length === 0) {
+      // Fallback: if no roles are "open" (e.g. all are exactly at min and no flex space),
+      // broaden to any role that simply has space, as global minimums ARE met.
+      candidateRoles = allRolesWithMinimums.filter(r => counts[r] < MAX_PLAYERS);
+      if (candidateRoles.length === 0) { // All roles are at MAX_PLAYERS
+        newRole = lastRole || allRolesWithMinimums[rng(0, allRolesWithMinimums.length - 1)];
+        break; // Absolute fallback if team is literally full for all roles.
       }
     }
 
-    // Streak prevention
-    if (role === last && streak >= 2) {
-      if (Math.random() < 0.7) continue; // 70% chance to reroll if on a 2+ streak of same role
+    let chosenRole;
+    if (rotateRolesCB && rotateRolesCB.checked && lastRole && candidateRoles.includes(lastRole)) {
+      const alternativeCandidates = candidateRoles.filter(r => r !== lastRole);
+      if (alternativeCandidates.length > 0) {
+        shuffle(alternativeCandidates);
+        chosenRole = alternativeCandidates[0];
+      } else {
+        // No alternatives, or lastRole wasn't a candidate to begin with (shouldn't happen if .includes was true)
+        chosenRole = lastRole; // Must stick if it's the only valid option among candidates
+      }
+    } else {
+      // Rotate not checked, or no lastRole, or lastRole not among current candidates.
+      shuffle(candidateRoles);
+      chosenRole = candidateRoles[0];
     }
-    
-    // Ensure we don't exceed overall player count for a role if it had a hard cap (currently just MAX_PLAYERS)
-    // This is mostly covered by the initial filter for eligibleBaseRoles and flex check.
+    newRole = chosenRole;
 
-    break; // Found a suitable role
-  } while (++tries < 50); // Increased tries for more complex logic
+    // Streak Prevention: Applied to the chosen role (which might have been rotated)
+    if (newRole === lastRole && streak >= 2) {
+      if (Math.random() < 0.7) { // 70% chance to reroll selection process
+        if (tries < 50) continue; // Try the whole selection again
+      }
+    }
+    break; // Role selected, or streak prevention attempts exhausted
+  } while (tries < 50);
 
-  return role;
+  return newRole || lastRole || allRolesWithMinimums[rng(0, allRolesWithMinimums.length - 1)]; // Final fallback
 }
 function applyRole(li,role){
   const iconImg = li.querySelector('.role-icon');
