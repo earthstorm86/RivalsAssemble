@@ -14,7 +14,7 @@
     <section class="panel options-panel"><h2>Options</h2>
       <button id="addBtn">Add Player</button>
       <button id="rollAllBtn">Roll All</button>
-      <button id="captureBtn">Capture</button>
+      <button id="captureBtn">Copy to clipboard</button>
       <button id="darkBtn">Dark Mode</button>
       <div class="role-options-section">
         <h3>Minimums</h3>
@@ -61,6 +61,13 @@
 const ANIMATE_ROLL_ALL_SORT = false; // Config option for animating sort on Roll All
 let HEROES_BY_ROLE = {}; // Initialize as empty object
 
+const ROLE_OVERLAY_CLASSES = [
+  'role-overlay-strategist',
+  'role-overlay-vanguard',
+  'role-overlay-duellist',
+  'role-overlay-flex'
+];
+
 async function loadHeroes() {
   try {
     const response = await fetch('data/heroes.json');
@@ -97,24 +104,106 @@ const rng=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rng(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;};
 const flexChance=()=>Math.random()<0.05;
 
-function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.innerHTML=`
+function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.dataset.active = 'false'; // Initially inactive
+li.innerHTML=`
   <button class="remove" title="Remove">×</button>
-  <input class="player-name" type="text" placeholder="Name">
+  <div class="player-name-wrapper">
+    <input class="player-name" type="text" placeholder="Name">
+    <button class="player-name-dropdown-arrow" title="Show saved names">▼</button>
+    <div class="player-name-dropdown-list"></div>
+  </div>
   <div class="role-info">
     <img class="role-icon" src="">
     <span class="role-name">No Role</span>
     <span class="suggested-hero"></span>
   </div>
   <button class="roll" title="Roll">🎲</button>
-`;li.dataset.lastRole='';li.dataset.streak='0';li.querySelector('.remove').addEventListener('click',()=>{li.remove();updateUI();updateQuickPopButtons();});li.querySelector('.roll').addEventListener('click',()=>singleRoll(li));
-// Add event listener to input for name changes
-li.querySelector('input[type="text"]').addEventListener('input', updateQuickPopButtons);
+`;li.dataset.lastRole='';li.dataset.streak='0';
+const playerNameInput = li.querySelector('.player-name');
+const dropdownArrow = li.querySelector('.player-name-dropdown-arrow');
+const rollButton = li.querySelector('.roll'); // Get roll button
 
-list.append(li);updateUI();updateQuickPopButtons();}
+rollButton.disabled = true; // Disable roll button initially
+
+li.querySelector('.remove').addEventListener('click',()=>{li.remove();updateUI();updateQuickPopButtons();updateAllPlayerStates();});
+rollButton.addEventListener('click',()=>singleRoll(li));
+playerNameInput.addEventListener('input', ()=>{
+  updateQuickPopButtons();
+  updateAllPlayerStates();
+});
+dropdownArrow.addEventListener('click', (e) => {
+  e.stopPropagation(); 
+  toggleNameDropdown(playerNameInput, dropdownArrow);
+});
+
+list.append(li);updateUI();updateQuickPopButtons();updateAllPlayerStates();}
+
+// --- Functions for Name Dropdown (moved to global scope) ---
+function toggleNameDropdown(inputElement, arrowButton) {
+  const wrapper = inputElement.closest('.player-name-wrapper');
+  const dropdownList = wrapper.querySelector('.player-name-dropdown-list');
+  const isOpen = dropdownList.classList.toggle('open');
+  if (isOpen) {
+    renderNameDropdownList(inputElement, dropdownList);
+  }
+}
+
+function renderNameDropdownList(inputElement, dropdownListContainer) {
+  const currentInputValue = inputElement.value.trim();
+  const allNames = getQuickNames();
+  const namesToShow = allNames.filter(name => name.toLowerCase() !== currentInputValue.toLowerCase());
+
+  dropdownListContainer.innerHTML = ''; // Clear previous items
+
+  if (namesToShow.length === 0) {
+    const noNamesItem = document.createElement('div');
+    noNamesItem.textContent = 'No other saved names';
+    noNamesItem.style.padding = '0.6rem 0.8rem';
+    noNamesItem.style.color = '#888';
+    dropdownListContainer.appendChild(noNamesItem);
+    return;
+  }
+
+  namesToShow.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'player-name-dropdown-item';
+    item.textContent = name;
+    item.addEventListener('click', () => {
+      inputElement.value = name;
+      dropdownListContainer.classList.remove('open');
+      // Trigger input event to update quick pop buttons and for other listeners
+      inputElement.dispatchEvent(new Event('input', { bubbles: true })); 
+    });
+    dropdownListContainer.appendChild(item);
+  });
+}
+
+// Global click listener to close dropdowns (moved to global scope)
+document.addEventListener('click', (event) => {
+  const openDropdowns = document.querySelectorAll('.player-name-dropdown-list.open');
+  openDropdowns.forEach(dropdown => {
+    // Check if the click was outside the dropdown and its associated input wrapper
+    if (!dropdown.closest('.player-name-wrapper').contains(event.target)) {
+      dropdown.classList.remove('open');
+    }
+  });
+});
+
+// --- End Functions for Name Dropdown ---
+
 function currentCounts(){const c={vanguard:0,duellist:0,strategist:0,flex:0};[...list.children].forEach(li=>{const r=li.dataset.lastRole;if(r)c[r]++;});return c;}
-function updateUI(){const c=list.children.length;addBtn.disabled=c>=MAX_PLAYERS;addBtn.classList.toggle('disabled',addBtn.disabled);list.querySelectorAll('.remove').forEach(b=>{b.disabled=c<=MIN_PLAYERS;
-// b.style.display = c <= MIN_PLAYERS ? 'none' : ''; // Removed hiding the button
-b.classList.toggle('disabled',b.disabled);});}
+function updateUI(){
+  const c = list.children.length;
+  const hasEmptySlot = [...list.children].some(item => !item.querySelector('.player-name').value.trim());
+  
+  addBtn.disabled = c >= MAX_PLAYERS || (c > 0 && hasEmptySlot && c < MAX_PLAYERS);
+  addBtn.classList.toggle('disabled',addBtn.disabled);
+  
+  list.querySelectorAll('.remove').forEach(b=>{
+    b.disabled = c <= MIN_PLAYERS; 
+    b.classList.toggle('disabled',b.disabled);
+  });
+}
 
 // Function to display a temporary message below the minimums heading
 function displayTemporaryMessage(message) {
@@ -205,25 +294,40 @@ function weightedDifferentRole(li, counts, minimums) {
 }
 function applyRole(li,role){
   const iconImg = li.querySelector('.role-icon');
-  iconImg.src = ICONS[role];
-  iconImg.style.display = 'inline-block'; // Make icon visible
-  const roleSpan = li.querySelector('.role-name'); // Updated selector
+  const roleSpan = li.querySelector('.role-name'); 
   const heroSpan = li.querySelector('.suggested-hero');
 
-  roleSpan.textContent=role.charAt(0).toUpperCase()+role.slice(1);
+  // Remove any existing role overlay classes
+  ROLE_OVERLAY_CLASSES.forEach(cls => li.classList.remove(cls));
 
-  // Suggest a random hero for base roles
-  if (BASE_ROLES.includes(role)) {
-    const heroList = HEROES_BY_ROLE[role.charAt(0).toUpperCase() + role.slice(1)]; // Get the list for the role
-    if (heroList && heroList.length > 0) {
-      const randomHero = heroList[rng(0, heroList.length - 1)]; // Select random hero
-      heroSpan.textContent = `${randomHero}`;
+  if (role) {
+    iconImg.src = ICONS[role];
+    iconImg.style.display = 'inline-block';
+    roleSpan.textContent=role.charAt(0).toUpperCase()+role.slice(1);
+
+    // Add new overlay class
+    if (role === 'strategist') li.classList.add('role-overlay-strategist');
+    else if (role === 'vanguard') li.classList.add('role-overlay-vanguard');
+    else if (role === 'duellist') li.classList.add('role-overlay-duellist');
+    else if (role === 'flex') li.classList.add('role-overlay-flex');
+
+    if (BASE_ROLES.includes(role)) {
+      const heroList = HEROES_BY_ROLE[role.charAt(0).toUpperCase() + role.slice(1)];
+      if (heroList && heroList.length > 0) {
+        const randomHero = heroList[rng(0, heroList.length - 1)];
+        heroSpan.textContent = `${randomHero}`;
+      } else {
+        heroSpan.textContent = 'No heroes listed';
+      }
     } else {
-      heroSpan.textContent = 'No heroes listed'; // Fallback if list is empty/missing
+      heroSpan.textContent = '';
     }
-  } else {
-    // Handle Flex or other potential roles (currently only Flex is expected)
-    heroSpan.textContent = ''; // Clear hero for Flex or no role
+  } else { // No role or cleared role
+    iconImg.src = '';
+    iconImg.style.display = 'none';
+    roleSpan.textContent = 'No Role';
+    heroSpan.textContent = '';
+    // Overlay classes already cleared
   }
 
   const last=li.dataset.lastRole;
@@ -249,9 +353,15 @@ function singleRoll(li){
   if (autoSortCB.checked) {
     sortPlayers(li, true); // Pass rolled LI and true to animate
   }
+  // Add player name to quick list if not empty
+  const playerNameInput = li.querySelector('.player-name');
+  if (playerNameInput && playerNameInput.value.trim() !== '') {
+    addNameToQuickList(playerNameInput.value.trim());
+  }
 }
 function rollAll(){
-  const players=[...list.children];
+  const players=[...list.children].filter(li => li.dataset.active === 'true'); // Only roll active players
+  if (players.length === 0) return; // No active players to roll
   const counts={vanguard:0,duellist:0,strategist:0,flex:0};
   const minimums = { 
     vanguard: parseInt(vanguardMinInput.value) || 0, 
@@ -267,6 +377,11 @@ function rollAll(){
       const role = weightedDifferentRole(pLi, assignedCounts, minimums);
       applyRole(pLi, role);
       assignedCounts[role]++;
+      // Add player name to quick list if not empty
+      const playerNameInput = pLi.querySelector('.player-name');
+      if (playerNameInput && playerNameInput.value.trim() !== '') {
+        addNameToQuickList(playerNameInput.value.trim());
+      }
   });
   
   if (autoSortCB.checked) { 
@@ -413,6 +528,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Default to dark mode
   document.body.classList.add('dark-mode');
 
+  const playerPanel = document.querySelector('.player-panel'); // Get player panel
+  const quickRow = document.querySelector('.quick-populate-row'); // Get existing quick-row
+
+  // Move quickRow into playerPanel if both exist
+  if (playerPanel && quickRow) {
+    playerPanel.appendChild(quickRow);
+  }
+
   addBtn.addEventListener('click',addPlayer);
   rollAllBtn.addEventListener('click',rollAll);
   captureBtn.addEventListener('click',capture);
@@ -447,8 +570,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const currentMinimumsSum = parseInt(vanguardMinInput.value || 0) + parseInt(duellistMinInput.value || 0) + parseInt(strategistMinInput.value || 0) + parseInt(flexMinInput.value || 0);
             const proposedSum = currentMinimumsSum - currentValue + newValue; // Subtract old value, add new
             if (proposedSum > MAX_PLAYERS) { // Use MAX_PLAYERS (6) for sum limit
-                displayTemporaryMessage(`Sum of minimums cannot exceed ${MAX_PLAYERS}.`);
-                return; // Don't update if sum exceeds limit
+              displayTemporaryMessage(`Sum of minimums cannot exceed ${MAX_PLAYERS}.`);
+              return; // Don't update if sum exceeds limit
             }
         }
         
@@ -459,42 +582,124 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  addPlayer();addPlayer(); // Initial players
+  addPlayer(); // Start with one empty player slot
 
   // Function to update the state of quick populate buttons
   updateQuickPopButtons(); // Initial call after players are added
 
   // Quick populate buttons setup
+  // const quickRow = document.querySelector('.quick-populate-row'); // Already selected
+
+  // New: Edit Names button - ensure it's appended to playerPanel after quickRow
+  if (playerPanel && quickRow) { // Check if playerPanel and quickRow exist
+    const editNamesBtn = document.createElement('button');
+    editNamesBtn.textContent = 'Edit Names';
+    editNamesBtn.className = 'edit-names-btn';
+    // quickRow.parentNode.insertBefore(editNamesBtn, quickRow.nextSibling); // Old insertion
+    playerPanel.appendChild(editNamesBtn); // Append to playerPanel
+    let isEditMode = false;
+
+    editNamesBtn.addEventListener('click', () => {
+      isEditMode = !isEditMode;
+      renderQuickPopulateButtons(isEditMode);
+      editNamesBtn.textContent = isEditMode ? 'Done Editing' : 'Edit Names';
+    });
+  }
+
+  renderQuickPopulateButtons(); // Initial render from localStorage
+
+  // Function to update the state of quick populate buttons
+  updateQuickPopButtons();
+});
+
+const QUICK_NAMES_STORAGE_KEY = 'rivalsRollerQuickNames';
+
+function getQuickNames() {
+  const storedNames = localStorage.getItem(QUICK_NAMES_STORAGE_KEY);
+  return storedNames ? JSON.parse(storedNames) : [];
+}
+
+function saveQuickNames(namesArray) {
+  localStorage.setItem(QUICK_NAMES_STORAGE_KEY, JSON.stringify(namesArray));
+}
+
+function addNameToQuickList(name) {
+  if (!name || name.trim() === '') return;
+  const currentNames = getQuickNames();
+  const trimmedName = name.trim();
+  if (!currentNames.includes(trimmedName)) {
+    currentNames.push(trimmedName);
+    saveQuickNames(currentNames);
+    if (document.body.contains(document.querySelector('.edit-names-btn'))) { // Re-render only if UI is present
+        renderQuickPopulateButtons(document.querySelector('.edit-names-btn').textContent === 'Done Editing');
+    }
+  }
+}
+
+function renderQuickPopulateButtons(editMode = false) {
   const quickRow = document.querySelector('.quick-populate-row');
-  const QUICK_NAMES = [
-    'Aaron', 'Brad', 'Eb', 'James', 'Joel', 'Jorge', 'Lloyd', 'Max', 'Nic', 'Ra', 'Zac'
-  ];
-  QUICK_NAMES.forEach(name => {
+  if (!quickRow) return;
+  quickRow.innerHTML = ''; // Clear existing buttons
+  const names = getQuickNames();
+
+  names.forEach(name => {
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'quick-pop-btn-container';
+    if (editMode) {
+        btnContainer.classList.add('edit-mode');
+    }
+
     const btn = document.createElement('button');
     btn.textContent = name;
     btn.className = 'quick-pop-btn';
+    if (editMode) {
+        btn.classList.add('edit-mode');
+    }
+    
     btn.addEventListener('click', () => {
-      let playerInputs = [...list.querySelectorAll('input')];
+      if (editMode) return; // Don't populate if in edit mode
+
+      let playerInputs = [...list.querySelectorAll('input.player-name')];
       let filled = false;
       for (let inp of playerInputs) {
         if (!inp.value.trim()) {
           inp.value = name;
+          updateQuickPopButtons(); // Update used state
+          updateAllPlayerStates(); // <<< ADDED THIS CALL
           filled = true;
           break;
         }
       }
       if (!filled && list.children.length < MAX_PLAYERS) {
-        addPlayer();
-        let newInput = list.lastChild.querySelector('input');
-        if (newInput) newInput.value = name;
+        addPlayer(); // This will call updateAllPlayerStates internally at its end
+        let newInput = list.lastChild.querySelector('input.player-name');
+        if (newInput) {
+            newInput.value = name;
+            updateQuickPopButtons(); // Update used state
+            updateAllPlayerStates(); // <<< ADDED THIS CALL (for the case where a new player is added and named)
+        }
       }
     });
-    quickRow.appendChild(btn);
-  });
 
-  // Function to update the state of quick populate buttons
-  updateQuickPopButtons();
-});
+    btnContainer.appendChild(btn);
+
+    if (editMode) {
+      const removeIcon = document.createElement('span');
+      removeIcon.className = 'remove-name-icon';
+      removeIcon.innerHTML = '&times;'; // Use &times; for a nice X icon
+      removeIcon.title = 'Remove this name';
+      removeIcon.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent button click when removing
+        const namesToKeep = getQuickNames().filter(n => n !== name);
+        saveQuickNames(namesToKeep);
+        renderQuickPopulateButtons(true); // Re-render in edit mode
+      });
+      btnContainer.appendChild(removeIcon);
+    }
+    quickRow.appendChild(btnContainer);
+  });
+  updateQuickPopButtons(); // Update used state for all buttons
+}
 
 // Function to update the state of quick populate buttons
 function updateQuickPopButtons() {
@@ -511,6 +716,35 @@ function updateQuickPopButtons() {
       button.disabled = false; // Enable the button functionality
     }
   });
+}
+
+// New function to update active states and auto-add player
+function updateAllPlayerStates() {
+  const players = [...list.children];
+  let allActive = true;
+  let activePlayerCount = 0;
+
+  players.forEach(li => {
+    const nameInput = li.querySelector('.player-name');
+    const rollButton = li.querySelector('.roll');
+    if (nameInput.value.trim() !== '') {
+      li.dataset.active = 'true';
+      rollButton.disabled = false;
+      rollButton.classList.remove('disabled');
+      activePlayerCount++;
+    } else {
+      li.dataset.active = 'false';
+      rollButton.disabled = true;
+      rollButton.classList.add('disabled');
+      allActive = false; // If any is empty, not all are active
+    }
+  });
+
+  // Auto-add new player if all existing have names and we are below max players
+  if (allActive && players.length > 0 && players.length < MAX_PLAYERS) {
+    addPlayer();
+  }
+  updateUI(); // Re-evaluate Add Player button state
 }
 </script>
 <div class="quick-populate-row">
