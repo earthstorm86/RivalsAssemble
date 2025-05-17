@@ -102,6 +102,9 @@ img {
   border-radius: .3rem;
   overflow: hidden; /* Add overflow hidden to prevent content from breaking the layout */
 }
+#minimumsWarning{
+  font-size: 0.7rem;
+}
 
 body:not(.dark-mode) .player-item {
     background: var(--card-bg); /* Use theme variable for light mode */
@@ -161,7 +164,8 @@ body:not(.dark-mode) .player-item .player-name {
 
 /* Role Info container (icon, name, hero) */
 .player-item .role-info {
-  display: flex;
+  display: grid;
+  grid-template-columns: 30px 1fr 1.8fr;
   align-items: center;
   gap: 0.3rem; /* Space between icon, name, and hero */
   min-width: 140px; /* Increased minimum size slightly */
