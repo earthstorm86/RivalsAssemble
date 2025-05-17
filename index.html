@@ -412,42 +412,51 @@ function weightedDifferentRole(li, counts, minimums) {
 
   return newRole || lastRole || allRolesWithMinimums[rng(0, allRolesWithMinimums.length - 1)]; // Final fallback
 }
-function applyRole(li, role, heroName) {
+function applyRole(li, newRoleParam, heroName) {
   const iconImg = li.querySelector('.role-icon');
-  const roleSpan = li.querySelector('.role-name'); 
+  const roleSpan = li.querySelector('.role-name');
   const heroSpan = li.querySelector('.suggested-hero');
 
-  // Remove any existing role overlay classes
-  ROLE_OVERLAY_CLASSES.forEach(cls => li.classList.remove(cls));
+  const previousRoleFull = li.dataset.lastRole; // e.g., "Vanguard" or ""
+  const previousRoleNormalized = previousRoleFull ? previousRoleFull.toLowerCase() : null; // e.g., "vanguard" or null
 
-  if (role) {
-    iconImg.src = ICONS[role];
-    iconImg.style.display = 'inline-block';
-    roleSpan.textContent = role.charAt(0).toUpperCase() + role.slice(1);
+  const newRoleFull = newRoleParam; // e.g., "Duellist" or null
+  const newRoleNormalized = newRoleFull ? newRoleFull.toLowerCase() : null; // e.g., "duellist" or null
 
-    // Add new overlay class
-    if (role === 'strategist') li.classList.add('role-overlay-strategist');
-    else if (role === 'vanguard') li.classList.add('role-overlay-vanguard');
-    else if (role === 'duellist') li.classList.add('role-overlay-duellist');
-    else if (role === 'flex') li.classList.add('role-overlay-flex');
+  // --- Update CSS Classes for background/overlay ---
+  if (newRoleNormalized !== previousRoleNormalized) {
+    const prevOverlayClass = previousRoleNormalized ? `role-overlay-${previousRoleNormalized}` : null;
+    const newOverlayClass = newRoleNormalized ? `role-overlay-${newRoleNormalized}` : null;
 
-    // Set hero span directly from the passed heroName
-    if (BASE_ROLES.includes(role)) {
-      heroSpan.textContent = heroName || ''; // Use provided heroName or empty if none
-    } else { // Flex role or other non-base roles
-      heroSpan.textContent = ''; // Flex usually doesn't have a specific hero suggestion from the list
+    if (prevOverlayClass && newOverlayClass) {
+      li.classList.replace(prevOverlayClass, newOverlayClass);
+    } else if (newOverlayClass) {
+      li.classList.add(newOverlayClass);
+    } else if (prevOverlayClass) {
+      li.classList.remove(prevOverlayClass);
     }
-  } else { // No role or cleared role
+  }
+
+  // --- Update UI elements (icon, text) ---
+  if (newRoleFull) {
+    iconImg.src = ICONS[newRoleNormalized];
+    iconImg.style.display = 'inline-block';
+    roleSpan.textContent = newRoleFull.charAt(0).toUpperCase() + newRoleFull.slice(1);
+    if (BASE_ROLES.includes(newRoleNormalized)) {
+      heroSpan.textContent = heroName || '';
+    } else {
+      heroSpan.textContent = '';
+    }
+  } else {
     iconImg.src = '';
     iconImg.style.display = 'none';
     roleSpan.textContent = 'No Role';
     heroSpan.textContent = '';
-    // Overlay classes already cleared
   }
 
-  const last = li.dataset.lastRole;
-  li.dataset.streak = (role === last ? parseInt(li.dataset.streak || '0', 10) + 1 : 1);
-  li.dataset.lastRole = role;
+  // --- Update streak and lastRole dataset ---
+  li.dataset.streak = (newRoleFull === previousRoleFull ? parseInt(li.dataset.streak || '0', 10) + 1 : 1);
+  li.dataset.lastRole = newRoleFull || '';
 }
 
 // New Helper Function to get a unique hero if possible
@@ -660,7 +669,7 @@ function copyPlayersTSV() {
 
 // Function to sort players by role (Vanguard, Duellist, Strategist, Flex)
 function sortPlayers(rolledLiElement = null, animateThisSort = true) {
-  if (!autoSortCB.checked) { // If auto-sort is off, just do a simple sort and return
+  if (!autoSortCB.checked) {
     const players = [...list.children];
     const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
     players.sort((a, b) => {
@@ -674,10 +683,11 @@ function sortPlayers(rolledLiElement = null, animateThisSort = true) {
       return indexA - indexB;
     });
     players.forEach(player => list.appendChild(player));
+    updateDiceDots();
     return;
   }
 
-  if (!animateThisSort) { // If this specific sort call shouldn't be animated (e.g. Roll All with config off)
+  if (!animateThisSort) {
     const players = [...list.children];
     const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
     players.sort((a, b) => {
@@ -691,18 +701,17 @@ function sortPlayers(rolledLiElement = null, animateThisSort = true) {
       return indexA - indexB;
     });
     players.forEach(player => list.appendChild(player));
+    updateDiceDots();
     return;
   }
 
   const playersLiElements = [...list.children];
   const oldPositions = new Map();
 
-  // 1. First: Record initial positions (offsetTop relative to the list)
   playersLiElements.forEach(li => {
     oldPositions.set(li, li.offsetTop);
   });
 
-  // --- Actual Sorting (JS array sort) ---
   const roleOrder = ['vanguard', 'duellist', 'strategist', 'flex', ''];
   const originalRolledIndex = rolledLiElement ? playersLiElements.indexOf(rolledLiElement) : -1;
 
@@ -717,61 +726,55 @@ function sortPlayers(rolledLiElement = null, animateThisSort = true) {
     return indexA - indexB;
   });
 
-  // --- Update DOM Order ---
   sortedPlayerLiElements.forEach(li => list.appendChild(li));
-
-  // Update dice dots after sorting
   updateDiceDots();
 
   const newRolledIndex = rolledLiElement ? sortedPlayerLiElements.indexOf(rolledLiElement) : -1;
   const rolledCardMoved = originalRolledIndex !== -1 && newRolledIndex !== -1 && originalRolledIndex !== newRolledIndex;
 
-  // Apply a temporary highlight to the rolled card, regardless of movement for single rolls
-  if (rolledLiElement && animateThisSort) { // animateThisSort is true for single rolls
+  if (rolledLiElement && animateThisSort) {
     rolledLiElement.classList.add('rolled-highlight');
     setTimeout(() => {
       rolledLiElement.classList.remove('rolled-highlight');
-    }, 700); // Highlight duration
+    }, 700);
   }
 
-  // --- Invert & Play ---
-  sortedPlayerLiElements.forEach(li => {
-    const oldTop = oldPositions.get(li);
-    if (typeof oldTop !== 'number') return; 
-
-    const newTop = li.offsetTop;
+  sortedPlayerLiElements.forEach(itemLi => {
+    const oldTop = oldPositions.get(itemLi);
+    if (typeof oldTop !== 'number') return;
+    const newTop = itemLi.offsetTop;
     const deltaY = oldTop - newTop;
 
-    li.style.transition = 'none'; // Disable transitions for the setup
+    itemLi.style.transition = 'none';
     let transformStyle = `translateY(${deltaY}px)`;
 
-    if (li === rolledLiElement && rolledCardMoved) { // Only scale and elevate if it actually moved
-      li.style.zIndex = '10';
+    if (itemLi === rolledLiElement && rolledCardMoved) {
+      itemLi.style.zIndex = '10';
       transformStyle += ' scale(1.05)';
     }
-    li.style.transform = transformStyle;
+    itemLi.style.transform = transformStyle;
   });
 
-  // Force reflow to apply the transform styles before starting the animation
   void list.offsetWidth;
 
-  // Play: Transition to new positions
-  sortedPlayerLiElements.forEach(li => {
-    li.style.transition = 'transform 0.5s ease-in-out';
-    if (li === rolledLiElement && rolledCardMoved) { // Ensure z-index also transitions if it was changed
-      li.style.transition = 'transform 0.5s ease-in-out, z-index 0s linear 0.5s';
+  sortedPlayerLiElements.forEach(itemLi => {
+    let transitions = ['transform 0.5s ease-in-out'];
+    if (itemLi === rolledLiElement && rolledCardMoved) {
+        transitions.push('z-index 0s linear 0.5s');
     }
-    li.style.transform = 'translateY(0px) scale(1)';
+    itemLi.style.transition = transitions.join(', ');
+    itemLi.style.transform = 'translateY(0px) scale(1)';
 
-    li.addEventListener('transitionend', function handler() {
-      li.style.transition = ''; // Clear specific transition property
-      if (li === rolledLiElement && rolledCardMoved) { // Only reset zIndex if it was set
-        li.style.zIndex = '';
+    itemLi.addEventListener('transitionend', function handler(event) {
+      if (event.propertyName === 'transform') { // Only act on transform transition end
+        itemLi.style.transition = '';
+        if (itemLi === rolledLiElement && rolledCardMoved) {
+          itemLi.style.zIndex = '';
+        }
+        itemLi.style.transform = 'none';
+        itemLi.removeEventListener('transitionend', handler);
       }
-      // IMPORTANT: Remove the transform to prevent stacking context issues
-      li.style.transform = 'none'; 
-      li.removeEventListener('transitionend', handler);
-    }, { once: true });
+    }, { once: true }); // {once: true} is fine if we only care about transform
   });
 }
 
