@@ -954,4 +954,12 @@ body:not(.dark-mode) .player-name-dropdown-item:hover {
 
 .options-panel {
   flex: 0 1 auto;
+}
+
+footer {
+  text-align: center;
+  font-size: 0.85em;
+  color: #888;
+  margin-top: 2em;
+  opacity: 0.7;
 } 

@@ -402,9 +402,14 @@ function weightedDifferentRole(li, counts, minimums, allRolesWithMinimums) {
 
     // Streak Prevention: Applied to the chosen role (which might have been rotated)
     if (newRole === lastRole && streak >= 2) {
-      if (Math.random() < 0.7) { // 70% chance to reroll selection process
-        if (tries < 50) continue; // Try the whole selection again
+      // Optimization: Only retry if there are alternatives available
+      const alternatives = candidateRoles.filter(r => r !== lastRole);
+      if (alternatives.length > 0) {
+        if (Math.random() < 0.7) { // 70% chance to reroll selection process
+          if (tries < 50) continue; // Try the whole selection again
+        }
       }
+      // If no alternatives, break early (no point in retrying)
     }
     break; // Role selected, or streak prevention attempts exhausted
   } while (tries < 50);
@@ -1060,5 +1065,8 @@ observer.observe(list, { childList: true });
 </script>
 <div class="quick-populate-row">
 </div>
+<footer style="text-align:center; font-size:0.85em; color:#888; margin-top:2em; opacity:0.7;">
+  Last published: <span id="publish-timestamp">BUILD_TIMESTAMP</span>
+</footer>
 </body>
 </html>
