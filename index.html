@@ -326,34 +326,46 @@ function weightedDifferentRole(li, counts, minimums, allRolesWithMinimums) {
   const lastRole = li.dataset.lastRole;
   const streak = parseInt(li.dataset.streak || '0', 10);
   let newRole;
-  let tries = 0;
 
-  // 1. Check if any role is now below its minimum due to this player's role being removed from 'counts'.
-  //    'counts' is the team's role distribution *before* this player gets a new role (i.e., their old role slot is vacant).
   const rolesNeededForMinimums = allRolesWithMinimums.filter(r => counts[r] < minimums[r]);
   if (rolesNeededForMinimums.length > 0) {
-    // If player's lastRole is one of the critically needed roles, or if not rotating, prioritize it.
-    // Otherwise, pick from any of the needed roles.
-    // This ensures minimums are strictly met first.
-    shuffle(rolesNeededForMinimums);
-    newRole = rolesNeededForMinimums[0]; 
-    
-    // If "Rotate Roles" is on, and the chosen role (to meet minimums) would be a streak repeat for this player,
-    // try to pick a different role that also meets minimums, if one exists.
-    if (rotateRolesCB && rotateRolesCB.checked && newRole === lastRole && streak >= 2) {
-        const alternativeRolesToMeetMinimums = rolesNeededForMinimums.filter(r => r !== lastRole);
-        if (alternativeRolesToMeetMinimums.length > 0) {
-            shuffle(alternativeRolesToMeetMinimums);
-            newRole = alternativeRolesToMeetMinimums[0];
-        }
-        // Else: No alternative role can meet minimums for this player without this specific repeat.
-        // So, 'newRole' (the repeat) is kept to satisfy the minimum requirement.
+    let rolesToConsiderForMinimums = [...rolesNeededForMinimums];
+
+    // If player was Flex, and there are non-Flex roles needing minimums, prioritize those for this player.
+    if (lastRole === 'flex') {
+      const nonFlexRolesNeeded = rolesNeededForMinimums.filter(r => r !== 'flex');
+      if (nonFlexRolesNeeded.length > 0) {
+        rolesToConsiderForMinimums = nonFlexRolesNeeded;
+      }
+      // Else: if player was Flex, and only Flex is in rolesNeededForMinimums (or no non-Flex roles are),
+      // rolesToConsiderForMinimums will still contain Flex (if Flex needs minimums).
+      // Or, if rolesNeededForMinimums was e.g. [Vanguard, Flex] and player was Flex,
+      // rolesToConsiderForMinimums becomes [Vanguard]. This is correct.
     }
-    return newRole; // Exit early, minimums dictated the choice.
+
+    if (rolesToConsiderForMinimums.length > 0) {
+      // This player CAN and MUST fill one of the roles in rolesToConsiderForMinimums.
+      let provisionalRole = shuffle([...rolesToConsiderForMinimums])[0];
+
+      if (rotateRolesCB.checked && provisionalRole === lastRole && streak >= 1) {
+        const alternativesInConsidered = rolesToConsiderForMinimums.filter(r => r !== lastRole);
+        if (alternativesInConsidered.length > 0) {
+          newRole = shuffle(alternativesInConsidered)[0]; // Rotate to another NEEDED role
+        } else {
+          newRole = provisionalRole; // Must stick with this role to meet minimums; no other *needed* alternative for this player.
+        }
+      } else {
+        newRole = provisionalRole; // No rotation needed/possible for this critical pick.
+      }
+      return newRole; // Role decided based on meeting minimums.
+    }
+    // If rolesToConsiderForMinimums IS empty (e.g., player was Flex, Flex was the only critical need, so it got filtered out),
+    // newRole is not set, and we fall through to general assignment logic.
   }
 
-  // If we are here, all minimums are currently met by the team composition in 'counts'.
-  // Now, try to select a role, respecting Rotate Roles preference.
+  // If we are here, ALL team minimums are currently met by OTHER players (or this player couldn't fill a filtered critical need above).
+  // Proceed with general role assignment, respecting rotation and streak prevention.
+  let tries = 0;
   do {
     tries++;
     let candidateRoles = [];
@@ -583,7 +595,6 @@ function rollAll(){
   const activePlayers = [...list.children].filter(li => li.dataset.active === 'true');
   if (activePlayers.length === 0) return; 
 
-  // Save the current team names before rolling
   const currentTeamNames = activePlayers.map(li => li.querySelector('.player-name').value.trim()).filter(name => name !== '');
   if (currentTeamNames.length > 0) {
     localStorage.setItem(LAST_ROLL_ALL_TEAM_KEY, JSON.stringify(currentTeamNames));
@@ -596,42 +607,74 @@ function rollAll(){
     strategist: parseInt(strategistMinInput.value) || 0,
     flex: parseInt(flexMinInput.value) || 0
   };
+  const assignedHeroesByRoleThisSession = {vanguard: [], duellist: [], strategist: []};
 
-  // Keep track of heroes assigned in this "roll all" session for each role
-  const assignedHeroesByRoleThisSession = {vanguard: [], duellist: [], strategist: []}; // Flex heroes are not tracked for uniqueness this way
+  let playersToProcessInitially = shuffle([...activePlayers]);
+  const playersForSecondPass = [];
 
-  // Shuffle the player list for fairer assignment
-  let playersToAssign = shuffle([...activePlayers]);
+  // STAGE 1: Prioritize players who were 'Flex' for unmet BASE role minimums
+  for (const pLi of playersToProcessInitially) {
+    let assignedInStage1 = false;
+    if (pLi.dataset.lastRole === 'flex') {
+      const baseRolesNeedingMinimums = BASE_ROLES.filter(role => assignedCounts[role] < minimums[role]);
+      if (baseRolesNeedingMinimums.length > 0) {
+        const targetBaseRole = shuffle([...baseRolesNeedingMinimums])[0];
 
-  // Shuffle the role order for even more randomness in assignment
-  const allRolesWithMinimums = shuffle([...BASE_ROLES, 'flex']);
-
-  playersToAssign.forEach(pLi => {
-      // Pass the shuffled role order to weightedDifferentRole for this assignment
-      const role = weightedDifferentRole(pLi, assignedCounts, minimums, allRolesWithMinimums);
-      let chosenHeroName = '';
-      if (BASE_ROLES.includes(role)) {
-        chosenHeroName = getUniqueHero(role, assignedHeroesByRoleThisSession[role] || [], HEROES_BY_ROLE);
-        if (!assignedHeroesByRoleThisSession[role]) {
-          assignedHeroesByRoleThisSession[role] = [];
+        let chosenHeroName = '';
+        // This check is technically redundant here as targetBaseRole is from BASE_ROLES
+        // but kept for consistency with hero assignment logic.
+        if (BASE_ROLES.includes(targetBaseRole)) { 
+          chosenHeroName = getUniqueHero(targetBaseRole, assignedHeroesByRoleThisSession[targetBaseRole] || [], HEROES_BY_ROLE);
+          if (!assignedHeroesByRoleThisSession[targetBaseRole]) {
+            assignedHeroesByRoleThisSession[targetBaseRole] = [];
+          }
+          if (chosenHeroName && chosenHeroName !== 'No heroes listed') {
+            assignedHeroesByRoleThisSession[targetBaseRole].push(chosenHeroName);
+          }
         }
-        if (chosenHeroName && chosenHeroName !== 'No heroes listed') { // Only add if a valid hero was picked
-            assignedHeroesByRoleThisSession[role].push(chosenHeroName);
+        applyRole(pLi, targetBaseRole, chosenHeroName);
+        assignedCounts[targetBaseRole]++;
+        assignedInStage1 = true;
+
+        const playerNameInput = pLi.querySelector('.player-name');
+        if (playerNameInput && playerNameInput.value.trim() !== '') {
+          addNameToQuickList(playerNameInput.value.trim());
         }
       }
-      applyRole(pLi, role, chosenHeroName);
-      assignedCounts[role]++;
-      // Add player name to quick list if not empty
-      const playerNameInput = pLi.querySelector('.player-name');
-      if (playerNameInput && playerNameInput.value.trim() !== '') {
-        addNameToQuickList(playerNameInput.value.trim());
+    }
+    if (!assignedInStage1) {
+      playersForSecondPass.push(pLi);
+    }
+  }
+
+  // STAGE 2: Assign remaining players using weightedDifferentRole
+  const allRolesForWeightedAssign = shuffle([...BASE_ROLES, 'flex']);
+
+  for (const pLi of playersForSecondPass) {
+    const role = weightedDifferentRole(pLi, assignedCounts, minimums, allRolesForWeightedAssign);
+    let chosenHeroName = '';
+    if (BASE_ROLES.includes(role)) {
+      chosenHeroName = getUniqueHero(role, assignedHeroesByRoleThisSession[role] || [], HEROES_BY_ROLE);
+      if (!assignedHeroesByRoleThisSession[role]) {
+        assignedHeroesByRoleThisSession[role] = [];
       }
-  });
+      if (chosenHeroName && chosenHeroName !== 'No heroes listed') {
+        assignedHeroesByRoleThisSession[role].push(chosenHeroName);
+      }
+    }
+    applyRole(pLi, role, chosenHeroName);
+    assignedCounts[role]++;
+
+    const playerNameInput = pLi.querySelector('.player-name');
+    if (playerNameInput && playerNameInput.value.trim() !== '') {
+      addNameToQuickList(playerNameInput.value.trim());
+    }
+  }
   
   if (autoSortCB.checked) { 
-    sortPlayers(null, ANIMATE_ROLL_ALL_SORT); // Pass null and config for animation
+    sortPlayers(null, ANIMATE_ROLL_ALL_SORT);
   }
-  updateDiceDots(); // Update dice dots after roll all (order might change if sorted)
+  updateDiceDots();
 }
 function copyPlayersPlainText(){
   const activePlayers = [...list.children].filter(li => li.dataset.active === 'true' && li.querySelector('.player-name').value.trim() !== '');
