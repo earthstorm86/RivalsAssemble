@@ -337,21 +337,18 @@ function weightedDifferentRole(li, counts, minimums, allRolesWithMinimums) {
     // This ensures minimums are strictly met first.
     shuffle(rolesNeededForMinimums);
     newRole = rolesNeededForMinimums[0]; 
-    // Apply streak prevention here if the only way to meet minimums is to repeat the last role.
-    if (newRole === lastRole && streak >= 2) {
-        if (Math.random() < 0.7 && rolesNeededForMinimums.length === 1 && rolesNeededForMinimums[0] === lastRole) {
-            // Highly constrained: only one role fixes minimums, and it's a streak.
-            // We are forced to pick it. Or, if there were other options in rolesNeededForMinimums, shuffle might pick a different one.
-        } else if (rolesNeededForMinimums.length > 1) {
-            // Try to pick a different needed role if lastRole was also needed
-            let otherNeededRoles = rolesNeededForMinimums.filter(r => r !== lastRole);
-            if (otherNeededRoles.length > 0) {
-                shuffle(otherNeededRoles);
-                newRole = otherNeededRoles[0];
-            }
+    
+    // If "Rotate Roles" is on, and the chosen role (to meet minimums) would be a streak repeat for this player,
+    // try to pick a different role that also meets minimums, if one exists.
+    if (rotateRolesCB && rotateRolesCB.checked && newRole === lastRole && streak >= 2) {
+        const alternativeRolesToMeetMinimums = rolesNeededForMinimums.filter(r => r !== lastRole);
+        if (alternativeRolesToMeetMinimums.length > 0) {
+            shuffle(alternativeRolesToMeetMinimums);
+            newRole = alternativeRolesToMeetMinimums[0];
         }
+        // Else: No alternative role can meet minimums for this player without this specific repeat.
+        // So, 'newRole' (the repeat) is kept to satisfy the minimum requirement.
     }
-    applyRole(li, newRole);
     return newRole; // Exit early, minimums dictated the choice.
   }
 
@@ -550,10 +547,17 @@ function singleRoll(li){
     strategist: parseInt(strategistMinInput.value) || 0,
     flex: parseInt(flexMinInput.value) || 0
   };
+  // Define and shuffle roles for this context, similar to rollAll
+  const allRolesForThisSingleRoll = shuffle([...BASE_ROLES, 'flex']);
+
   do {
-    newRole = weightedDifferentRole(li, counts, minimums);
+    // Pass allRolesForThisSingleRoll to weightedDifferentRole
+    newRole = weightedDifferentRole(li, counts, minimums, allRolesForThisSingleRoll);
     tries++;
-  } while (newRole === li.dataset.lastRole && tries < 40 && BASE_ROLES.includes(newRole)); // Added BASE_ROLES check to ensure flex can repeat if needed
+    // The loop should attempt to prevent repeats for ANY role if rotate is on,
+    // relying on weightedDifferentRole to handle rotate logic.
+    // The main goal of this loop is to give a few chances if the exact same role comes up immediately.
+  } while (newRole === li.dataset.lastRole && tries < 10); // Reduced tries, and removed BASE_ROLES.includes(newRole)
 
   let chosenHeroName = '';
   if (BASE_ROLES.includes(newRole)) {
