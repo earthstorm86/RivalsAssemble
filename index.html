@@ -368,11 +368,11 @@ function weightedDifferentRole(li, counts, minimums) {
       }
     });
 
-    // Add Flex by chance if it's not already a candidate due to its own min (e.g., flexMin=0)
-    // and it has space and its minimum is met.
-    if (flexChance() && !candidateRoles.includes('flex') && counts['flex'] < MAX_PLAYERS && minimums['flex'] <= counts['flex']) {
-      candidateRoles.push('flex');
-    }
+    // Always add Flex as a candidate if it has space and its minimum is met (treat like other roles)
+    // (No longer using flexChance random gating)
+    // if (!candidateRoles.includes('flex') && counts['flex'] < MAX_PLAYERS && minimums['flex'] <= counts['flex']) {
+    //   candidateRoles.push('flex');
+    // }
 
     if (candidateRoles.length === 0) {
       // Fallback: if no roles are "open" (e.g. all are exactly at min and no flex space),
