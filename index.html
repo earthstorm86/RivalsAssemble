@@ -322,12 +322,11 @@ function validateAndAdjustMinimums(changedInput) {
   }
 }
 
-function weightedDifferentRole(li, counts, minimums) {
+function weightedDifferentRole(li, counts, minimums, allRolesWithMinimums) {
   const lastRole = li.dataset.lastRole;
   const streak = parseInt(li.dataset.streak || '0', 10);
   let newRole;
   let tries = 0;
-  const allRolesWithMinimums = [...BASE_ROLES, 'flex'];
 
   // 1. Check if any role is now below its minimum due to this player's role being removed from 'counts'.
   //    'counts' is the team's role distribution *before* this player gets a new role (i.e., their old role slot is vacant).
@@ -592,10 +591,15 @@ function rollAll(){
   // Keep track of heroes assigned in this "roll all" session for each role
   const assignedHeroesByRoleThisSession = {vanguard: [], duellist: [], strategist: []}; // Flex heroes are not tracked for uniqueness this way
 
-  let playersToAssign = [...activePlayers];
+  // Shuffle the player list for fairer assignment
+  let playersToAssign = shuffle([...activePlayers]);
+
+  // Shuffle the role order for even more randomness in assignment
+  const allRolesWithMinimums = shuffle([...BASE_ROLES, 'flex']);
 
   playersToAssign.forEach(pLi => {
-      const role = weightedDifferentRole(pLi, assignedCounts, minimums);
+      // Pass the shuffled role order to weightedDifferentRole for this assignment
+      const role = weightedDifferentRole(pLi, assignedCounts, minimums, allRolesWithMinimums);
       let chosenHeroName = '';
       if (BASE_ROLES.includes(role)) {
         chosenHeroName = getUniqueHero(role, assignedHeroesByRoleThisSession[role] || [], HEROES_BY_ROLE);
