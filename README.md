@@ -40,8 +40,15 @@ node test_random.js
 
 The repository includes a GitHub Actions workflow that automatically updates the
 timestamp shown at the bottom of `index.html` whenever changes are pushed to the
-`master` branch. No manual edits are required to keep the "Last published" date
-current.
+`master` branch. If you're working locally or the workflow isn't available, run
+the helper script to refresh the timestamp manually:
+
+```bash
+python update_timestamp.py index.html
+```
+
+This replaces the placeholder with the current UTC time so the page always
+shows the latest publish date.
 
 ---
 
