@@ -40,8 +40,7 @@ node test_random.js
 
 The repository includes a GitHub Actions workflow that automatically updates the
 timestamp shown at the bottom of `index.html` whenever changes are pushed to the
-`master` branch. No manual edits are required to keep the "Last published" date
-current.
+
 
 ---
 
