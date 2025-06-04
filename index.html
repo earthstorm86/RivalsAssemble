@@ -545,6 +545,35 @@ function updateDiceDots() {
   });
 }
 
+// Attempt to rotate roles for a group of players while keeping overall counts valid
+function attemptDerangedAssignment(players, currentCounts, minimums, maxTries = 100) {
+  if (players.length === 0) return null;
+
+  const rolesPool = players.map(p => p.dataset.lastRole);
+  if (new Set(rolesPool).size <= 1) return null; // Not enough variety to rotate
+
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const shuffledRoles = shuffle([...rolesPool]);
+    let valid = true;
+    const tempCounts = { ...currentCounts };
+
+    for (let i = 0; i < players.length; i++) {
+      const role = shuffledRoles[i];
+      if (role === players[i].dataset.lastRole) { valid = false; break; }
+      tempCounts[role]++;
+    }
+
+    if (!valid) continue;
+    if (tempCounts.vanguard < minimums.vanguard) continue;
+    if (tempCounts.duellist < minimums.duellist) continue;
+    if (tempCounts.strategist < minimums.strategist) continue;
+    if (tempCounts.flex < minimums.flex) continue;
+
+    return shuffledRoles;
+  }
+  return null;
+}
+
 function singleRoll(li){
   const counts = currentCounts();
   if (li.dataset.lastRole) { // Check if lastRole exists before decrementing
@@ -647,10 +676,43 @@ function rollAll(){
     }
   }
 
-  // STAGE 2: Assign remaining players using weightedDifferentRole
+  // STAGE 2: Try rotating remaining players away from their previous roles
   const allRolesForWeightedAssign = shuffle([...BASE_ROLES, 'flex']);
 
-  for (const pLi of playersForSecondPass) {
+  const playersWithHistory = playersForSecondPass.filter(p => p.dataset.lastRole);
+  const playersWithoutHistory = playersForSecondPass.filter(p => !p.dataset.lastRole);
+
+  let rotatedRoles = null;
+  if (rotateRolesCB.checked) {
+    rotatedRoles = attemptDerangedAssignment(playersWithHistory, { ...assignedCounts }, minimums);
+  }
+
+  if (rotatedRoles) {
+    playersWithHistory.forEach((pLi, idx) => {
+      const role = rotatedRoles[idx];
+      let chosenHeroName = '';
+      if (BASE_ROLES.includes(role)) {
+        chosenHeroName = getUniqueHero(role, assignedHeroesByRoleThisSession[role] || [], HEROES_BY_ROLE);
+        if (!assignedHeroesByRoleThisSession[role]) {
+          assignedHeroesByRoleThisSession[role] = [];
+        }
+        if (chosenHeroName && chosenHeroName !== 'No heroes listed') {
+          assignedHeroesByRoleThisSession[role].push(chosenHeroName);
+        }
+      }
+      applyRole(pLi, role, chosenHeroName);
+      assignedCounts[role]++;
+
+      const playerNameInput = pLi.querySelector('.player-name');
+      if (playerNameInput && playerNameInput.value.trim() !== '') {
+        addNameToQuickList(playerNameInput.value.trim());
+      }
+    });
+  } else {
+    playersWithoutHistory.push(...playersWithHistory); // process all individually
+  }
+
+  for (const pLi of playersWithoutHistory) {
     const role = weightedDifferentRole(pLi, assignedCounts, minimums, allRolesForWeightedAssign);
     let chosenHeroName = '';
     if (BASE_ROLES.includes(role)) {
@@ -1113,7 +1175,7 @@ observer.observe(list, { childList: true });
 <div class="quick-populate-row">
 </div>
 <footer style="text-align:center; font-size:0.85em; color:#888; margin-top:2em; opacity:0.7;">
-  Last published: <span id="publish-timestamp">2025-05-19 23:15:42</span>
+  Last published: <span id="publish-timestamp">BUILD_TIMESTAMP</span>
 </footer>
 </body>
 </html>

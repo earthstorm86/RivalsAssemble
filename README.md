@@ -1,6 +1,6 @@
 # Marvel Rivals Roll‑A‑Roller
 
-A web-based tool for randomizing player roles for Marvel Rivals matches. Supports up to 6 players, with role assignment logic and a clean, modern UI.
+A web-based tool for randomizing player roles for Marvel Rivals matches. Supports up to 6 players with role assignment logic and a clean, modern UI.
 
 ## Features
 - Add/remove players (2–6)
@@ -23,14 +23,26 @@ A web-based tool for randomizing player roles for Marvel Rivals matches. Support
 ## File Structure
 - `index.html` – Main application HTML and JavaScript
 - `css/style.css` – All styles for the app
-- `images/FlexIcon.png` – Flex role icon
-- `images/VanguardIcon.png` – Vanguard role icon
-- `images/StrategistIcon.png` – Strategist role icon
-- `images/DuellistIcon.png` – Duellist role icon
-- `images/logo.png` – App logo (large)
-- `images/logo250px.png` – App logo (250px)
-- `images/Logo.jpg` – App logo (old, to be deprecated or removed)
+- `images/` – Application images and icons
+
+## Development
+Run the small validation script to ensure `index.html` parses correctly:
+
+```bash
+python validate_html.py index.html
+```
+
+To verify the randomness helpers, run the accompanying Node test script:
+
+```bash
+node test_random.js
+```
+
+The repository includes a GitHub Actions workflow that automatically updates the
+timestamp shown at the bottom of `index.html` whenever changes are pushed to the
+`master` branch. No manual edits are required to keep the "Last published" date
+current.
 
 ---
 
-For any further improvements or issues, please open a ticket or contact the maintainer. 
+For any further improvements or issues, please open a ticket or contact the maintainer.
