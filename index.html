@@ -103,6 +103,7 @@ const flexChance=()=>Math.random()<0.05;
 function addPlayer(){if(list.children.length>=MAX_PLAYERS)return;const li=document.createElement('li');li.className='player-item';li.dataset.active = 'false'; // Initially inactive
 li.innerHTML=`
   <button class="remove" title="Remove">×</button>
+  <button class="lock-toggle" title="Lock / Unlock"><i class="fas fa-lock-open"></i></button>
   <div class="player-name-wrapper">
     <input class="player-name" type="text" placeholder="Name">
     <button class="player-name-dropdown-arrow" title="Show saved names">▼</button>
@@ -131,10 +132,29 @@ li.innerHTML=`
       <circle id="dot-mid-r" cx="17" cy="12" r="2" fill="black"/>
     </svg>
   </button>
-`;li.dataset.lastRole='';li.dataset.streak='0';
+`;li.dataset.lastRole='';li.dataset.streak='0';li.dataset.locked='false';
 const playerNameInput = li.querySelector('.player-name');
 const dropdownArrow = li.querySelector('.player-name-dropdown-arrow');
 const rollButton = li.querySelector('.roll'); // Get roll button
+const lockToggle = li.querySelector('.lock-toggle');
+
+lockToggle.addEventListener('click', () => {
+  const isLocked = li.dataset.locked === 'true';
+  li.dataset.locked = isLocked ? 'false' : 'true';
+  lockToggle.innerHTML = isLocked ? '<i class="fas fa-lock-open"></i>' : '<i class="fas fa-lock"></i>';
+  li.classList.toggle('locked', !isLocked);
+  // Disable or enable individual roll button based on lock state
+  if (li.dataset.locked === 'true') {
+    rollButton.disabled = true;
+    rollButton.classList.add('disabled');
+  } else {
+    // Re-evaluate roll button based on active status
+    if (li.dataset.active === 'true') {
+      rollButton.disabled = false;
+      rollButton.classList.remove('disabled');
+    }
+  }
+});
 
 rollButton.disabled = true; // Disable roll button initially
 
@@ -575,6 +595,7 @@ function attemptDerangedAssignment(players, currentCounts, minimums, maxTries = 
 }
 
 function singleRoll(li){
+  if (li.dataset.locked === 'true') return; // Skip locked players
   const counts = currentCounts();
   if (li.dataset.lastRole) { // Check if lastRole exists before decrementing
     counts[li.dataset.lastRole]--;
@@ -630,15 +651,31 @@ function rollAll(){
   }
 
   const assignedCounts = {vanguard:0, duellist:0, strategist:0, flex:0};
-  const minimums = { 
-    vanguard: parseInt(vanguardMinInput.value) || 0, 
-    duellist: parseInt(duellistMinInput.value) || 0, 
+
+  // Capture current minimum requirements
+  const minimums = {
+    vanguard: parseInt(vanguardMinInput.value) || 0,
+    duellist: parseInt(duellistMinInput.value) || 0,
     strategist: parseInt(strategistMinInput.value) || 0,
     flex: parseInt(flexMinInput.value) || 0
   };
+
+  // Separate locked players and accumulate their roles/heroes first
+  const lockedPlayers = activePlayers.filter(p => p.dataset.locked === 'true');
   const assignedHeroesByRoleThisSession = {vanguard: [], duellist: [], strategist: []};
 
-  let playersToProcessInitially = shuffle([...activePlayers]);
+  lockedPlayers.forEach(lp => {
+    const role = lp.dataset.lastRole;
+    if (role) assignedCounts[role]++;
+    if (BASE_ROLES.includes(role)) {
+      const hero = lp.querySelector('.suggested-hero').textContent.trim();
+      if (hero) assignedHeroesByRoleThisSession[role].push(hero);
+    }
+  });
+
+  const playersToRoll = activePlayers.filter(p => p.dataset.locked !== 'true');
+
+  let playersToProcessInitially = shuffle([...playersToRoll]);
   const playersForSecondPass = [];
 
   // STAGE 1: Prioritize players who were 'Flex' for unmet BASE role minimums
@@ -1149,8 +1186,10 @@ function updateAllPlayerStates() {
     const rollButton = li.querySelector('.roll');
     if (nameInput.value.trim() !== '') {
       li.dataset.active = 'true';
-      rollButton.disabled = false;
-      rollButton.classList.remove('disabled');
+      const isLocked = li.dataset.locked === 'true';
+      rollButton.disabled = isLocked;
+      if (isLocked) rollButton.classList.add('disabled');
+      else rollButton.classList.remove('disabled');
       activePlayerCount++;
     } else {
       li.dataset.active = 'false';
